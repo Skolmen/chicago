@@ -1,0 +1,6 @@
+{
+  "name": "chicago-online",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Kortspelet Chicago (svenska regler) i webbläsaren, mobilanpassat. Dator-motst\u00e5ndare f\u00f6rst, onlinespel senare."
+}
