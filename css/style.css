@@ -49,3 +49,16 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .trickSlot .card { width:calc(var(--card-w)*.78); height:calc(var(--card-h)*.78); }
 .trickSlot.old { opacity:.55; }
 .trickCap { width:100%; text-align:center; font-size:.72rem; opacity:.65; margin-bottom:-4px; }
+
+/* Öppet kort vid byte */
+.openrow { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+.openrow .card { width: min(13vw, 50px); height: calc(min(13vw, 50px) * 1.45); font-size: 13px; }
+.openrow span { font-size: 13px; opacity: .85; }
+/* Ställning i menyn */
+.standings { margin: 2px 0 14px; }
+.standcap { font-size: 13px; opacity: .8; margin-bottom: 8px; }
+.standrow { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,.07); margin-bottom: 6px; }
+.standrow.lead { background: rgba(255,214,102,.16); box-shadow: inset 0 0 0 1px rgba(255,214,102,.45); }
+.standrank { opacity: .7; font-size: 13px; width: 14px; }
+.standname { flex: 1; font-weight: 600; }
+.standpts { font-weight: 700; }

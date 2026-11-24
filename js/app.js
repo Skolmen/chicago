@@ -1,7 +1,7 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
 import { Game, RULES } from './engine.js';
-import { botExchange, botWantsChicago, botPlay } from './bot.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice } from './bot.js';
 import { SUITS, rankLabel, cardLabel } from './poker.js';
 
 const BOT = 1, HUMAN = 0;
@@ -103,6 +103,9 @@ function render() {
   const hand = p[HUMAN].hand;
   hand.forEach((card, idx) => {
     const c = cardEl(card);
+    if (a && a.player === HUMAN && a.action === 'openOffer') {
+      c.classList.toggle('sel', game.openOffer && game.openOffer.idx === idx);
+    }
     if (a && a.player === HUMAN) {
       if (a.action === 'exchange') {
         c.classList.toggle('sel', selected.has(idx));
@@ -119,6 +122,15 @@ function render() {
   // Knappar
   el.actions.innerHTML = '';
   if (game.over) return;
+  if (a && a.action === 'openOffer') {
+    const row = document.createElement('div');
+    row.className = 'openrow';
+    row.appendChild(cardEl(a.card));
+    const lbl = document.createElement('span');
+    lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer');
+    row.appendChild(lbl);
+    el.actions.appendChild(row);
+  }
   if (a && a.player === HUMAN) {
     if (a.action === 'exchange') {
       el.actions.appendChild(button(`Byt ${selected.size} kort`, selected.size ? 'primary' : '', () => {
@@ -127,6 +139,10 @@ function render() {
       }));
       if (selected.size) el.actions.appendChild(button('Rensa val', '', () => { selected = new Set(); render(); }));
       el.tableMsg.textContent = 'Välj kort att byta (eller byt inga).';
+    } else if (a.action === 'openOffer') {
+      el.tableMsg.textContent = 'Ta det öppna kortet, eller släng det och dra ett stängt.';
+      el.actions.appendChild(button('Ta det öppna kortet', 'primary', () => { game.resolveOpen(HUMAN, true); selected = new Set(); }));
+      el.actions.appendChild(button('Släng det och dra ett stängt', '', () => { game.resolveOpen(HUMAN, false); selected = new Set(); }));
     } else if (a.action === 'chicago') {
       el.tableMsg.textContent = 'Du kan buda Chicago: lova att ta alla fem stick.';
       el.actions.appendChild(button('Buda Chicago', 'primary danger', () => game.bidChicago(HUMAN)));
@@ -185,6 +201,7 @@ function maybeBot() {
     if (game.over || !game.awaiting || game.awaiting.player !== BOT) return;
     const cur = game.awaiting;
     if (cur.action === 'exchange') game.exchange(BOT, botExchange(game.players[BOT].hand));
+    else if (cur.action === 'openOffer') game.resolveOpen(BOT, botOpenChoice(game.players[BOT].hand, cur.card, game.openOffer.idx));
     else if (cur.action === 'chicago') botWantsChicago(game.players[BOT].hand, game.players[BOT].points) ? game.bidChicago(BOT) : game.passChicago();
     else if (cur.action === 'play') {
       const i = botPlay({
@@ -276,7 +293,7 @@ let botPending = false;
 setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
 
 function boot() {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   el.menuBtn = document.getElementById('menuBtn');
   if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
   const saved = restoreGame();
