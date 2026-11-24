@@ -265,7 +265,7 @@ function showMenu(title) {
   }));
   if (game && !game.over) btns.push(button('Poängtabell', '', () => showOverlay(scoreTableHtml(), [button('Tillbaka till menyn', '', () => showMenu(title))])));
   if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
-  if (loadArchive().length) btns.push(button(`Arkiv (${loadArchive().length})`, '', () => showArchive()));
+  btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   showOverlay(`<h2>${title || 'Meny'}</h2>`, btns);
