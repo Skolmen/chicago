@@ -9,9 +9,10 @@ const BOT_NAME = 'Datorn';
 
 let game = null;
 let selected = new Set();
+let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent']) {
+for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea']) {
   el[id] = document.getElementById(id);
 }
 
@@ -68,6 +69,32 @@ function render() {
     const d = document.createElement('div');
     d.textContent = line;
     el.log.appendChild(d);
+  }
+
+  // Spelade kort i sticket (pågående, annars förra sticket svagt)
+  if (el.trickArea) {
+    el.trickArea.innerHTML = '';
+    const tcs = game.trickCards || [];
+    if (tcs.length) lastTrickView = { giv: game.giv, cards: tcs.map(x => ({ player: x.player, card: { r: x.card.r, s: x.card.s } })) };
+    const vis = tcs.length ? tcs : (lastTrickView && lastTrickView.giv === game.giv ? lastTrickView.cards : []);
+    if (vis.length) {
+      if (!tcs.length) {
+        const cap = document.createElement('div');
+        cap.className = 'trickCap';
+        cap.textContent = 'Förra sticket';
+        el.trickArea.appendChild(cap);
+      }
+      for (const tc of vis) {
+        const wrap = document.createElement('div');
+        wrap.className = 'trickSlot' + (tcs.length ? '' : ' old');
+        wrap.appendChild(cardEl(tc.card));
+        const lbl = document.createElement('div');
+        lbl.className = 'trickName';
+        lbl.textContent = p[tc.player].name;
+        wrap.appendChild(lbl);
+        el.trickArea.appendChild(wrap);
+      }
+    }
   }
 
   // Spelarens hand
