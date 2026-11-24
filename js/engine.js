@@ -122,16 +122,21 @@ export class Game {
   }
 
   step() {
+    this._step();
+    if (this.awaiting) this.emit({ type: 'await', awaiting: this.awaiting });
+  }
+
+  _step() {
     if (this.over) return;
     if (this.phase === 'kop1' || this.phase === 'kop2' || this.phase === 'kop3') {
       const next = this.players.findIndex((p, i) => !this.exchanged.has(i) && !p.kopstopp);
       if (next === -1) {
-        if (this.phase === 'kop1') { this.scoreHands('efter första köpet'); this.phase = 'kop2'; this.exchanged = new Set(); return this.step(); }
-        if (this.phase === 'kop2') { this.scoreHands('efter andra köpet'); this.phase = 'kop3'; this.exchanged = new Set(); return this.step(); }
+        if (this.phase === 'kop1') { this.scoreHands('efter första köpet'); this.phase = 'kop2'; this.exchanged = new Set(); return this._step(); }
+        if (this.phase === 'kop2') { this.scoreHands('efter andra köpet'); this.phase = 'kop3'; this.exchanged = new Set(); return this._step(); }
         this.sluthand = this.players.map(p => p.hand.slice());
         this.phase = 'chicago';
         this.chicagoAsked = new Set();
-        return this.step();
+        return this._step();
       }
       this.awaiting = { player: next, action: 'exchange' };
       return;
@@ -212,5 +217,6 @@ export class Game {
     }
     this.phase = 'givEnd';
     this.awaiting = { action: 'nextGiv' };
+    this.emit({ type: 'await', awaiting: this.awaiting });
   }
 }
