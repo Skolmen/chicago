@@ -272,6 +272,15 @@ function showArchive() {
 }
 
 // --- Meny ---
+function standingsHtml() {
+  const rows = game.players.map(p => ({ name: p.name, pts: p.points })).sort((x, y) => y.pts - x.pts);
+  let html = `<div class="standings"><div class="standcap">Giv ${game.giv} · ${game.players[game.dealer].name} ger · först till ${RULES.target} p</div>`;
+  rows.forEach((r, k) => {
+    const lead = k === 0 && rows.length > 1 && r.pts > rows[1].pts;
+    html += `<div class="standrow${lead ? ' lead' : ''}"><span class="standrank">${k + 1}</span><span class="standname">${r.name}</span><span class="standpts">${r.pts} p</span></div>`;
+  });
+  return html + '</div>';
+}
 function showMenu(title) {
   const hasSave = !!restoreGame();
   const btns = [];
@@ -285,7 +294,9 @@ function showMenu(title) {
   btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
-  showOverlay(`<h2>${title || 'Meny'}</h2>`, btns);
+  let head = `<h2>${title || 'Meny'}</h2>`;
+  if (game && !game.over) head += standingsHtml();
+  showOverlay(head, btns);
 }
 
 // --- Vakt: om en händelse skulle gå förlorad körs datorns tur ändå ---
