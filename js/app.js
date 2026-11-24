@@ -168,10 +168,6 @@ function handleEvent(e) {
   saveGame();
 }
 
-// Vakt: om en händelse skulle gå förlorad körs datorns tur ändå.
-let botPending = false;
-setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
-
 // --- Sparing i localStorage ---
 const SAVE_KEY = 'chicago.sav.v1';
 function saveGame() {
@@ -185,4 +181,35 @@ function restoreGame() {
   catch (_) { return null; }
 }
 
-startGame();
+// --- Meny ---
+function showMenu(title) {
+  const hasSave = !!restoreGame();
+  showOverlay(`<h2>${title || 'Meny'}</h2>`);
+  el.actions.innerHTML = '';
+  if (hasSave) el.actions.appendChild(button('Fortsätt sparade partiet', 'primary', () => {
+    const g = restoreGame();
+    if (g) { game = g; game.onEvent = handleEvent; }
+    hideOverlay(); render(); maybeBot(); saveGame();
+  }));
+  el.actions.appendChild(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
+  el.actions.appendChild(button('Stäng', '', () => { hideOverlay(); render(); }));
+}
+
+// --- Vakt: om en händelse skulle gå förlorad körs datorns tur ändå ---
+let botPending = false;
+setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
+
+function boot() {
+  el.menuBtn = document.getElementById('menuBtn');
+  if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
+  const saved = restoreGame();
+  if (saved && !saved.over) {
+    game = saved; game.onEvent = handleEvent;
+    hideOverlay(); render(); maybeBot(); saveGame();
+    showMenu('Välkommen tillbaka');
+  } else {
+    startGame();
+  }
+}
+
+boot();
