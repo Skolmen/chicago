@@ -17,6 +17,7 @@ for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playe
 }
 
 function startGame() {
+  archiveCurrent(); // pågående parti hamnar i arkivet i stället för att försvinna
   game = new Game(['Du', BOT_NAME]);
   game.onEvent = handleEvent;
   selected = new Set();
@@ -219,6 +220,40 @@ function restoreGame() {
   catch (_) { return null; }
 }
 
+// --- Arkiv: flera sparade partier ---
+const ARCHIVE_KEY = 'chicago.archive.v1';
+function loadArchive() { try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY)) || []; } catch (_) { return []; } }
+function saveArchive(list) { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list)); } catch (_) {} }
+function archiveName(g) {
+  const d = new Date();
+  return `${d.toLocaleDateString('sv-SE')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · giv ${g.giv} · ${g.players[0].points}p-${g.players[1].points}p`;
+}
+function archiveCurrent() {
+  if (!game || game.over) return false;
+  const list = loadArchive();
+  list.unshift({ name: archiveName(game), savedAt: Date.now(), data: game.toJSON() });
+  if (list.length > 12) list.length = 12; // äldsta sparningen släpps ut
+  saveArchive(list);
+  return true;
+}
+function openArchived(item) {
+  const g = Game.fromJSON(item.data);
+  if (!g) return false;
+  game = g; game.onEvent = handleEvent;
+  hideOverlay(); render(); maybeBot(); saveGame();
+  return true;
+}
+function showArchive() {
+  const list = loadArchive();
+  const btns = [];
+  list.forEach((item, i) => {
+    btns.push(button(`Öppna ${i + 1}: ${item.name}`, i === 0 ? 'primary' : '', () => { openArchived(item); }));
+    btns.push(button(`Ta bort ${i + 1}`, 'danger', () => { const l = loadArchive(); l.splice(i, 1); saveArchive(l); showArchive(); }));
+  });
+  btns.push(button('Tillbaka till menyn', 'primary', () => showMenu()));
+  showOverlay(`<h2>Arkiv</h2>${list.length ? '' : '<p class="mini">Inga sparade partier.</p>'}`, btns);
+}
+
 // --- Meny ---
 function showMenu(title) {
   const hasSave = !!restoreGame();
@@ -229,6 +264,8 @@ function showMenu(title) {
     hideOverlay(); render(); maybeBot(); saveGame();
   }));
   if (game && !game.over) btns.push(button('Poängtabell', '', () => showOverlay(scoreTableHtml(), [button('Tillbaka till menyn', '', () => showMenu(title))])));
+  if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
+  if (loadArchive().length) btns.push(button(`Arkiv (${loadArchive().length})`, '', () => showArchive()));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   showOverlay(`<h2>${title || 'Meny'}</h2>`, btns);
