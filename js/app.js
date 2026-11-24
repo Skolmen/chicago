@@ -138,8 +138,10 @@ function maybeBot() {
   const a = game.awaiting;
   if (!a) return;
   if (a.action === 'nextGiv') return;
-  if (a.player !== BOT) return;
+  if (a.player !== BOT || botPending) return;
+  botPending = true;
   setTimeout(() => {
+    botPending = false;
     if (game.over || !game.awaiting || game.awaiting.player !== BOT) return;
     const cur = game.awaiting;
     if (cur.action === 'exchange') game.exchange(BOT, botExchange(game.players[BOT].hand));
@@ -163,5 +165,9 @@ function handleEvent(e) {
   render();
   maybeBot();
 }
+
+// Vakt: om en händelse skulle gå förlorad körs datorns tur ändå.
+let botPending = false;
+setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
 
 startGame();
