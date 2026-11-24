@@ -22,6 +22,7 @@ function startGame() {
   hideOverlay();
   game.start();
   render();
+  saveGame();
 }
 
 function cardEl(card, opts = {}) {
@@ -161,13 +162,27 @@ function maybeBot() {
 }
 
 function handleEvent(e) {
-  if (e.type === 'gameOver') { render(); showGameOver(); return; }
+  if (e.type === 'gameOver') { localStorage.removeItem(SAVE_KEY); render(); showGameOver(); return; }
   render();
   maybeBot();
+  saveGame();
 }
 
 // Vakt: om en händelse skulle gå förlorad körs datorns tur ändå.
 let botPending = false;
 setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
+
+// --- Sparing i localStorage ---
+const SAVE_KEY = 'chicago.sav.v1';
+function saveGame() {
+  try {
+    if (!game || game.over) { localStorage.removeItem(SAVE_KEY); return; }
+    localStorage.setItem(SAVE_KEY, JSON.stringify(game.toJSON()));
+  } catch (_) { /* lagring kan vara avstängd */ }
+}
+function restoreGame() {
+  try { return Game.fromJSON(JSON.parse(localStorage.getItem(SAVE_KEY))); }
+  catch (_) { return null; }
+}
 
 startGame();
