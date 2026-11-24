@@ -113,10 +113,20 @@ function render() {
   }
 }
 
+function scoreTableHtml() {
+  const p = game.players;
+  let html = `<h2>Poängtabell</h2><table class="scoretable"><tr><th>Giv</th>${p.map(x => `<th>${x.name}</th>`).join('')}</tr>`;
+  game.history.forEach((row, i) => {
+    html += `<tr><td>${i + 1}</td>${row.scores.map(s => `<td>${s}</td>`).join('')}</tr>`;
+  });
+  html += `<tr class="total"><td>Totalt</td>${p.map(x => `<td>${x.points}</td>`).join('')}</tr></table>`;
+  html += `<p class="mini">Först till ${RULES.target} poäng när given är klar vinner partiet.</p>`;
+  return html;
+}
+
 function givSummary() {
-  const rows = game.players.map(x => `<div class="scoreline"><span>${x.name}</span><strong>${x.points} p</strong></div>`).join('');
   const tail = game.log.slice(-6).map(l => `<div>${l}</div>`).join('');
-  return `<h2>Giv ${game.giv} är klar</h2>${rows}<div class="mini">${tail}</div>`;
+  return `${scoreTableHtml()}<div class="mini">${tail}</div>`;
 }
 
 function showOverlay(html, buttons = []) {
@@ -191,6 +201,7 @@ function showMenu(title) {
     if (g) { game = g; game.onEvent = handleEvent; }
     hideOverlay(); render(); maybeBot(); saveGame();
   }));
+  if (game && !game.over) btns.push(button('Poängtabell', '', () => showOverlay(scoreTableHtml(), [button('Tillbaka till menyn', '', () => showMenu(title))])));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   showOverlay(`<h2>${title || 'Meny'}</h2>`, btns);
