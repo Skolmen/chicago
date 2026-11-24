@@ -44,3 +44,8 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .scoretable td:first-child, .scoretable th:first-child { text-align:left; }
 .scoretable td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
 .scoretable tr.total td { font-weight:700; border-top:2px solid #444; border-bottom:none; }
+#trickArea { display:flex; gap:14px; justify-content:center; align-items:flex-end; min-height:calc(var(--card-h)*.8 + 20px); flex-wrap:wrap; }
+.trickSlot { display:flex; flex-direction:column; align-items:center; gap:2px; font-size:.72rem; opacity:.95; }
+.trickSlot .card { width:calc(var(--card-w)*.78); height:calc(var(--card-h)*.78); }
+.trickSlot.old { opacity:.55; }
+.trickCap { width:100%; text-align:center; font-size:.72rem; opacity:.65; margin-bottom:-4px; }
