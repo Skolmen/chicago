@@ -52,7 +52,7 @@ function button(label, cls, fn) {
 function render() {
   if (!game) return;
   const p = game.players, a = game.awaiting;
-  el.givLabel.textContent = `Giv ${game.giv}`;
+  el.givLabel.textContent = `Giv ${game.giv} · ${p[game.dealer].name} ger`;
   el.scoreYou.textContent = `${p[HUMAN].name}: ${p[HUMAN].points} p` + (p[HUMAN].kopstopp ? ' (köpstopp)' : '');
   el.scoreBot.textContent = `${p[BOT].name}: ${p[BOT].points} p`;
   const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
