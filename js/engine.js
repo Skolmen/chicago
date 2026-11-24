@@ -219,4 +219,30 @@ export class Game {
     this.awaiting = { action: 'nextGiv' };
     this.emit({ type: 'await', awaiting: this.awaiting });
   }
+  // Spara och ladda parti (för localStorage).
+  toJSON() {
+    return {
+      v: 1,
+      players: this.players.map(p => ({ name: p.name, points: p.points, hand: p.hand, kopstopp: p.kopstopp, lastScoredCat: p.lastScoredCat })),
+      giv: this.giv, dealer: this.dealer, talong: this.talong, phase: this.phase,
+      exchanged: [...this.exchanged], bid: this.bid, chicagoAsked: [...this.chicagoAsked],
+      trickNo: this.trickNo, trickCards: this.trickCards, tricksWon: this.tricksWon,
+      leader: this.leader, sluthand: this.sluthand, over: this.over,
+      winner: this.winner ? this.players.indexOf(this.winner) : null,
+      log: this.log.slice(-120), awaiting: this.awaiting
+    };
+  }
+  static fromJSON(d) {
+    if (!d || d.v !== 1) return null;
+    const g = new Game(d.players.map(p => p.name));
+    g.players.forEach((p, i) => Object.assign(p, d.players[i]));
+    g.giv = d.giv; g.dealer = d.dealer; g.talong = d.talong; g.phase = d.phase;
+    g.exchanged = new Set(d.exchanged); g.bid = d.bid; g.chicagoAsked = new Set(d.chicagoAsked);
+    g.trickNo = d.trickNo; g.trickCards = d.trickCards || []; g.tricksWon = d.tricksWon;
+    g.leader = d.leader; g.sluthand = d.sluthand; g.over = d.over;
+    g.winner = d.winner === null ? null : g.players[d.winner];
+    g.log = d.log || []; g.awaiting = d.awaiting || null;
+    return g;
+  }
+
 }
