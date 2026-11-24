@@ -107,8 +107,7 @@ function render() {
       el.tableMsg.textContent = a.mustSuit == null ? 'Spel ut vilket kort som helst.' : `Följ ${['spader', 'hjärter', 'ruter', 'klöver'][a.mustSuit]} om du kan.`;
     }
   } else if (a && a.action === 'nextGiv') {
-    showOverlay(givSummary());
-    el.actions.appendChild(button('Nästa giv', 'primary', () => { hideOverlay(); game.nextGiv(); }));
+    showOverlay(givSummary(), [button('Nästa giv', 'primary', () => { hideOverlay(); game.nextGiv(); })]);
   } else {
     el.tableMsg.textContent = `${p[a?.player ?? BOT].name} tänker...`;
   }
@@ -120,7 +119,11 @@ function givSummary() {
   return `<h2>Giv ${game.giv} är klar</h2>${rows}<div class="mini">${tail}</div>`;
 }
 
-function showOverlay(html) { el.overlayContent.innerHTML = html; el.overlay.classList.remove('hidden'); }
+function showOverlay(html, buttons = []) {
+  el.overlayContent.innerHTML = html;
+  for (const b of buttons) el.overlayContent.appendChild(b);
+  el.overlay.classList.remove('hidden');
+}
 function hideOverlay() { el.overlay.classList.add('hidden'); }
 
 function showGameOver() {
@@ -128,9 +131,7 @@ function showGameOver() {
   showOverlay(`<h2>${youWon ? 'Du vann!' : `${game.winner.name} vann`}</h2>
     <div class="scoreline"><span>Du</span><strong>${game.players[HUMAN].points} p</strong></div>
     <div class="scoreline"><span>${BOT_NAME}</span><strong>${game.players[BOT].points} p</strong></div>
-    <p class="mini">Först till ${RULES.target} poäng när given är färdig.</p>`);
-  el.actions.innerHTML = '';
-  el.actions.appendChild(button('Nytt parti', 'primary', startGame));
+    <p class="mini">Först till ${RULES.target} poäng när given är färdig.</p>`, [button('Nytt parti', 'primary', startGame)]);
 }
 
 // Botens turer körs med liten fördröjning så det känns som ett spel.
@@ -184,15 +185,15 @@ function restoreGame() {
 // --- Meny ---
 function showMenu(title) {
   const hasSave = !!restoreGame();
-  showOverlay(`<h2>${title || 'Meny'}</h2>`);
-  el.actions.innerHTML = '';
-  if (hasSave) el.actions.appendChild(button('Fortsätt sparade partiet', 'primary', () => {
+  const btns = [];
+  if (hasSave) btns.push(button('Fortsätt sparade partiet', 'primary', () => {
     const g = restoreGame();
     if (g) { game = g; game.onEvent = handleEvent; }
     hideOverlay(); render(); maybeBot(); saveGame();
   }));
-  el.actions.appendChild(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
-  el.actions.appendChild(button('Stäng', '', () => { hideOverlay(); render(); }));
+  btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
+  btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
+  showOverlay(`<h2>${title || 'Meny'}</h2>`, btns);
 }
 
 // --- Vakt: om en händelse skulle gå förlorad körs datorns tur ändå ---
