@@ -23,6 +23,8 @@ export class Game {
     this.winner = null;
     this.log = [];
     this.awaiting = null; // { player, action, ... } som väntar på input
+    this.discard = [];    // slängda kort (dolt öppet kort hamnar här)
+    this.openOffer = null; // { player, idx, card } när ett öppet kort erbjuds
     this.onEvent = null;
   }
 
@@ -49,6 +51,8 @@ export class Game {
     this.tricksWon = this.players.map(() => 0);
     this.leader = null;
     this.sluthand = null;
+    this.discard = [];
+    this.openOffer = null;
     this.awaiting = null;
     this.say(`Giv ${this.giv} börjar. ${this.players[this.dealer].name} ger.`);
     this.step();
@@ -78,6 +82,16 @@ export class Game {
 
   exchange(i, idxs) {
     const p = this.players[i];
+    if (idxs.length === 1 && this.talong.length) {
+      // Ett öppet: kortet som skulle dras visas öppet för alla. Ta det eller
+      // släng det och ta nästa kort stängt.
+      const card = this.talong[this.talong.length - 1];
+      this.openOffer = { player: i, idx: idxs[0], card };
+      this.awaiting = { player: i, action: 'openOffer', card };
+      this.say(`Öppet kort: ${cardLabel(card)} — ${p.name} väljer.`);
+      this.emit({ type: 'await', awaiting: this.awaiting });
+      return;
+    }
     const discard = new Set(idxs);
     const removed = p.hand.filter((c, k) => discard.has(k));
     p.hand = p.hand.filter((c, k) => !discard.has(k));
@@ -88,6 +102,34 @@ export class Game {
     this.awaiting = null;
     this.emit({ type: 'exchange', player: i, count: removed.length, mustShow });
     this.say(`${p.name} byter ${removed.length} kort${mustShow ? ' (visar byteskorten)' : ''}.`);
+    this.step();
+  }
+
+  resolveOpen(i, take) {
+    const a = this.awaiting;
+    if (!a || a.action !== 'openOffer' || a.player !== i || !this.openOffer) return;
+    const p = this.players[i];
+    const { idx } = this.openOffer;
+    this.awaiting = null;
+    this.openOffer = null;
+    const dropped = p.hand.splice(idx, 1)[0];
+    this.discard.push(dropped);
+    if (take) {
+      const open = this.talong.pop();
+      p.hand.push(open);
+      this.say(`${p.name} tog det öppna kortet (${cardLabel(open)}).`);
+    } else {
+      const open = this.talong.pop();
+      this.discard.push(open);
+      if (this.talong.length) {
+        p.hand.push(this.talong.pop());
+        this.say(`${p.name} slängde det öppna kortet och tog ett stängt.`);
+      } else {
+        this.say(`${p.name} slängde det öppna kortet; talongen tog slut, inget nytt kort.`);
+      }
+    }
+    this.exchanged.add(i);
+    this.emit({ type: 'open', player: i, took: take });
     this.step();
   }
 
@@ -230,6 +272,7 @@ export class Game {
       exchanged: [...this.exchanged], bid: this.bid, chicagoAsked: [...this.chicagoAsked],
       trickNo: this.trickNo, trickCards: this.trickCards, tricksWon: this.tricksWon,
       leader: this.leader, sluthand: this.sluthand, over: this.over,
+      discard: this.discard, openOffer: this.openOffer,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
       log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
@@ -244,6 +287,7 @@ export class Game {
     g.leader = d.leader; g.sluthand = d.sluthand; g.over = d.over;
     g.winner = d.winner === null ? null : g.players[d.winner];
     g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
+    g.discard = d.discard || []; g.openOffer = d.openOffer || null;
     return g;
   }
 

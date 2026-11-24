@@ -1,7 +1,7 @@
 // Headless-tester: handutvärdering + hela simulerade partier med två botar.
 import { newDeck, shuffle, evaluate5, compareHands, handPoints } from './js/poker.js';
 import { Game, RULES } from './js/engine.js';
-import { botExchange, botWantsChicago, botPlay } from './js/bot.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice } from './js/bot.js';
 
 let failures = 0;
 function check(name, cond) {
@@ -26,6 +26,7 @@ check('exakt lika', compareHands(evaluate5([C(14, S), C(12, H), C(9, D), C(7, K)
 function botMoveFor(i, game) {
   const a = game.awaiting;
   if (a.action === 'exchange') return game.exchange(i, botExchange(game.players[i].hand));
+  if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
   if (a.action === 'play') {
     return game.playCard(i, botPlay({
@@ -122,3 +123,55 @@ process.exit(failures === 0 ? 0 : 1);
   if (rt.history.length !== g.history.length) throw new Error('historien följer inte med i sparningen');
   console.log('OK: poängtabell per giv + sparning');
 }
+
+// Ett öppet: erbjuds vid byte av exakt ett kort
+{
+  const g = new Game(['Du', 'Datorn'], mulberry32(1));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(3, H), C(5, D), C(9, K), C(11, S)];
+  g.talong = [C(4, S), C(7, D), C(14, S)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  g.exchange(0, [1]);
+  check('öppet erbjuds', !!g.awaiting && g.awaiting.action === 'openOffer' && g.awaiting.card.r === 14 && g.awaiting.card.s === S);
+  g.resolveOpen(0, true);
+  check('öppet taget: 5 kort, byte på plats', g.players[0].hand.length === 5 && g.players[0].hand.some(c => c.r === 14 && c.s === S) && !g.players[0].hand.some(c => c.r === 3 && c.s === H));
+  check('kastat kortet i kasthögen', g.discard.length === 1 && g.discard[0].r === 3 && g.discard[0].s === H);
+  check('byt registrerat', g.exchanged.has(0));
+}
+{
+  const g = new Game(['Du', 'Datorn'], mulberry32(1));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(3, H), C(5, D), C(9, K), C(11, S)];
+  g.talong = [C(4, S), C(14, S)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  g.exchange(0, [4]);
+  g.resolveOpen(0, false);
+  check('nekat öppet: fick stängt kort i stället', g.players[0].hand.length === 5 && g.players[0].hand.some(c => c.r === 4) && !g.players[0].hand.some(c => c.r === 14));
+  check('öppna kortet slängt', g.discard.some(c => c.r === 14) && g.talong.length === 0);
+}
+{
+  const g = new Game(['Du', 'Datorn'], mulberry32(1));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(3, H), C(5, D), C(9, K), C(11, S)];
+  g.talong = [C(4, S), C(6, D), C(8, K), C(10, S), C(12, H)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  g.exchange(0, [0, 1]);
+  check('flerkortsbyte utan öppet', !g.awaiting || g.awaiting.action !== 'openOffer');
+  check('flerkortsbyte drar stängt', g.players[0].hand.length === 5 && g.talong.length === 3);
+}
+{
+  // spara och ladda mitt i erbjudandet
+  const g = new Game(['Du', 'Datorn'], mulberry32(1));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(3, H), C(5, D), C(9, K), C(11, S)];
+  g.talong = [C(4, S), C(7, D), C(14, S)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  g.exchange(0, [2]);
+  const g2 = Game.fromJSON(g.toJSON());
+  check('öppet överlever sparning', g2.awaiting && g2.awaiting.action === 'openOffer' && g2.openOffer.card.r === 14);
+  g2.resolveOpen(0, true);
+  check('efter laddning: öppet kan tas', g2.players[0].hand.length === 5 && g2.players[0].hand.some(c => c.r === 14));
+}
+// Botens val: öppet kort som behåller kategorin tas
+check('bot tar gynnande öppet', botOpenChoice([C(5, S), C(5, H), C(9, D), C(11, K), C(2, S)], C(5, D), 4) === true);
+check('bot nekar sämre öppet', botOpenChoice([C(5, S), C(5, H), C(9, D), C(11, K), C(13, S)], C(3, K), 4) === false);
