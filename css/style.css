@@ -38,3 +38,9 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .mini { font-size:.8rem; opacity:.75; margin-top:10px; display:flex; flex-direction:column; gap:2px; }
 
 #overlayContent .btn { display:block; width:100%; margin-top:8px; }
+.scoretable { width:100%; border-collapse:collapse; margin:8px 0; font-size:.95rem; }
+.scoretable th, .scoretable td { border-bottom:1px solid #e5e0d0; padding:6px; }
+.scoretable th { text-align:left; opacity:.8; font-weight:600; }
+.scoretable td:first-child, .scoretable th:first-child { text-align:left; }
+.scoretable td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
+.scoretable tr.total td { font-weight:700; border-top:2px solid #444; border-bottom:none; }

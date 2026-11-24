@@ -96,3 +96,29 @@ process.exit(failures === 0 ? 0 : 1);
   if (!g2.over) throw new Error('laddat parti kom inte i mål');
   console.log('OK: spara/ladda-rundtrip och fortsatt parti');
 }
+
+// Test: poängtabellen fylls per giv
+{
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.start();
+  let guard = 0;
+  while (!g.over && guard++ < 500) {
+    const a = g.awaiting;
+    if (!a) break;
+    if (a.action === 'exchange') g.exchange(a.player, []);
+    else if (a.action === 'chicago') g.passChicago();
+    else if (a.action === 'nextGiv') g.nextGiv();
+    else {
+      const p = g.players[a.player];
+      const legal = a.mustSuit == null ? p.hand : (p.hand.some(c => c.s === a.mustSuit) ? p.hand.filter(c => c.s === a.mustSuit) : p.hand);
+      g.playCard(a.player, p.hand.indexOf(legal[0]));
+    }
+  }
+  if (!g.over) throw new Error('partiet kom inte i mål (tabelltest)');
+  if (!Array.isArray(g.history) || g.history.length < 2) throw new Error('poängtabellen saknar givrader');
+  if (g.history[g.history.length - 1].scores.length !== 2) throw new Error('fel antal kolumner i tabellen');
+  const rt = Game.fromJSON(JSON.parse(JSON.stringify(g.toJSON())));
+  if (rt.history.length !== g.history.length) throw new Error('historien följer inte med i sparningen');
+  console.log('OK: poängtabell per giv + sparning');
+}

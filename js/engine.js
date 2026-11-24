@@ -16,6 +16,7 @@ export class Game {
   constructor(names, rng = Math.random) {
     this.rng = rng;
     this.players = names.map(n => ({ name: n, points: 0, hand: [], kopstopp: false, lastScoredCat: 0 }));
+    this.history = [];
     this.giv = 0;
     this.dealer = names.length - 1;
     this.over = false;
@@ -200,6 +201,7 @@ export class Game {
         this.say(`${p.name} har köpstopp vid ${p.points} p och byter inte fler kort.`);
       }
     }
+    this.history.push({ giv: this.giv, scores: this.players.map(p => p.points) });
     this.emit({ type: 'givEnd', scores: this.players.map(p => ({ name: p.name, points: p.points })) });
     const over = this.players.filter(p => p.points >= RULES.target);
     if (over.length) {
@@ -229,7 +231,7 @@ export class Game {
       trickNo: this.trickNo, trickCards: this.trickCards, tricksWon: this.tricksWon,
       leader: this.leader, sluthand: this.sluthand, over: this.over,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
-      log: this.log.slice(-120), awaiting: this.awaiting
+      log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
   }
   static fromJSON(d) {
@@ -241,7 +243,7 @@ export class Game {
     g.trickNo = d.trickNo; g.trickCards = d.trickCards || []; g.tricksWon = d.tricksWon;
     g.leader = d.leader; g.sluthand = d.sluthand; g.over = d.over;
     g.winner = d.winner === null ? null : g.players[d.winner];
-    g.log = d.log || []; g.awaiting = d.awaiting || null;
+    g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
     return g;
   }
 
