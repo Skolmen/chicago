@@ -276,6 +276,7 @@ let botPending = false;
 setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
 
 function boot() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   el.menuBtn = document.getElementById('menuBtn');
   if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
   const saved = restoreGame();
