@@ -64,3 +64,35 @@ function mulberry32(a) {
 
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);
+
+// Test: spara och ladda parti
+{
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.start();
+  g.exchange(0, [0, 1]);
+  g.exchange(1, [2]);
+  g.playCard(0, 0);
+  const d = JSON.parse(JSON.stringify(g.toJSON()));
+  if (d.v !== 1 || d.players.length !== 2) throw new Error('toJSON fält saknas');
+  const g2 = Game.fromJSON(d);
+  if (JSON.stringify(g2.toJSON()) !== JSON.stringify(g.toJSON())) throw new Error('round trip misslyckades');
+  if (g2.players[0].hand.length !== g.players[0].hand.length) throw new Error('handlängder skiljer');
+  if (g2.phase !== g.phase) throw new Error('fas skiljer');
+  // laddat parti ska kunna fortsätta till klart slut
+  let guard = 0;
+  while (!g2.over && guard++ < 500) {
+    const a = g2.awaiting;
+    if (!a) break;
+    if (a.action === 'exchange') g2.exchange(a.player, a.player === 0 ? [] : [0]);
+    else if (a.action === 'chicago') a.player === 0 ? g2.passChicago() : g2.bidChicago(1);
+    else if (a.action === 'nextGiv') g2.nextGiv();
+    else {
+      const p = g2.players[a.player];
+      const legal = a.mustSuit == null ? p.hand : (p.hand.some(c => c.s === a.mustSuit) ? p.hand.filter(c => c.s === a.mustSuit) : p.hand);
+      g2.playCard(a.player, p.hand.indexOf(legal[0]));
+    }
+  }
+  if (!g2.over) throw new Error('laddat parti kom inte i mål');
+  console.log('OK: spara/ladda-rundtrip och fortsatt parti');
+}
