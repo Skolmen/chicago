@@ -66,3 +66,10 @@ export function botPlay({ hand, trickCards, mustSuit, isBidder, opponentBid, tri
   }
   return lowest();
 }
+
+// Ska boten ta det öppna kortet? Ta det om det minst behåller handens kategori.
+export function botOpenChoice(hand, openCard, idx) {
+  const remaining = hand.filter((_, k) => k !== idx);
+  const withOpen = evaluate5([...remaining, openCard]);
+  return withOpen.cat >= evaluate5(hand).cat;
+}
