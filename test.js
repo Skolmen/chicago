@@ -30,7 +30,7 @@ function botMoveFor(i, game) {
   if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
   if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat, a.bestEv); return c != null ? game.announceBud(i) : game.budPass(i); }
   if (a.action === 'halvAsk') return (game.halv.n === 0 || (game.halv.comp > 0 && game.halv.n === 1)) ? game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp)) : game.halvDone(i);
-  if (a.action === 'halvAnswer') return game.halvAnswer(i, botHalvAnswer(game.players[i].hand, a.n));
+  if (a.action === 'halvAnswer') return game.halvAnswer(i, botHalvAnswer(game.players[i].hand, a.n, game.halv ? game.halv.comp : 0));
   if (a.action === 'fyrtalVal') return game.fyrtalTake(i);
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
   if (a.action === 'play') {
@@ -247,7 +247,7 @@ function mulberry32(a) {
       if (a.action === 'openOffer') { g.resolveOpen(a.player, botOpenChoice(g.players[a.player].hand, a.card, a.idx)); continue; }
       if (a.action === 'bud') { const c = botBud(g.players[a.player].hand, a.bestCat, a.bestEv); c != null ? g.announceBud(a.player) : g.budPass(a.player); continue; }
       if (a.action === 'halvAsk') { (g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1)) ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)) : g.halvDone(a.player); continue; }
-      if (a.action === 'halvAnswer') { g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n)); continue; }
+      if (a.action === 'halvAnswer') { g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n, g.halv ? g.halv.comp : 0)); continue; }
       if (a.action === 'fyrtalVal') { g.fyrtalTake(a.player); continue; }
       throw new Error('oväntad action ' + a.action);
     }

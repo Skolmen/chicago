@@ -1,6 +1,6 @@
 // Enkel bot: heuristiker för byte, Chicago-bud och stickspel.
 
-import { evaluate5, compareHands } from './poker.js?v=22';
+import { evaluate5, compareHands } from './poker.js?v=23';
 
 // Vilka kort som ska bytas: behåll kort som bidrar till par/triss, färgdrag
 // eller stegdrag. Returnerar index i handen att slänga.
@@ -73,9 +73,9 @@ export function botHalvAsk(hand, comp = 0) {
   return ev.tie && ev.tie.length ? (ev.tie[comp] ?? ev.tie[ev.tie.length - 1]) : 7;
 }
 
-export function botHalvAnswer(hand, n) {
+export function botHalvAnswer(hand, n, comp = 0) {
   const ev = evaluate5(hand);
-  const r = ev.tie[0];
+  const r = ev.tie[comp] ?? ev.tie[ev.tie.length - 1];
   return r > n ? 'över' : r < n ? 'under' : 'exakt';
 }
 
