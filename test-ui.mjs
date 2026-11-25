@@ -38,7 +38,7 @@ while (guard++ < 8000 && stuck < 6) {
   const overlay = elements.get('overlayContent');
   if (overlay.innerHTML.includes('Först till')) { finished = true; break; }
   const acts = elements.get('actions');
-  let btn = acts.children.find(c => c['on_click'] && (c.textContent || '').includes('Nöjd'));
+  let btn = acts.children.find(c => c['on_click'] && (c.textContent || '').includes('Ställ frågan'));
   if (!btn) btn = acts.children.find(c => c['on_click']);
   if (btn) { btn['on_click'](); stuck = 0; continue; }
   const cards = elements.get('playerCards');

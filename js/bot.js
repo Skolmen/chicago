@@ -1,6 +1,6 @@
 // Enkel bot: heuristiker för byte, Chicago-bud och stickspel.
 
-import { evaluate5, compareHands } from './poker.js?v=23';
+import { evaluate5, compareHands } from './poker.js?v=25';
 
 // Vilka kort som ska bytas: behåll kort som bidrar till par/triss, färgdrag
 // eller stegdrag. Returnerar index i handen att slänga.

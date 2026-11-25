@@ -1,7 +1,7 @@
 // Rigorös testsvit för Chicago (issue 84). Kör: node test-all.js
-import { Game, RULES } from './js/engine.js?v=23';
-import { newDeck, evaluate5, compareHands, handPoints } from './js/poker.js?v=23';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './js/bot.js?v=23';
+import { Game, RULES } from './js/engine.js?v=25';
+import { newDeck, evaluate5, compareHands, handPoints } from './js/poker.js?v=25';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './js/bot.js?v=25';
 
 let failures = 0, checks = 0;
 function check(name, cond, extra) {
@@ -125,7 +125,11 @@ function budScore(hand0) {
   g.players[0].hand = [C(13, SP), C(13, HJ), C(3, RU), C(9, KL), C(11, SP)];
   g.players[1].hand = [C(12, SP), C(12, HJ), C(4, RU), C(9, KL), C(11, SP)];
   g.announceBud(0); g.announceBud(1);
-  check('lägre par får inte säga (tyst)', g.budAnnounced === 0 && g.log.some(l => l.includes('är tyst')));
+  check('lägre par får utmana: halvering öppnas', g.budAnnounced === 0 && g.halv && g.halv.asker === 1 && g.halv.target === 0);
+  g.halvAsk(1);
+  check('lägre utmanare frågar vid eget värde', g.awaiting.n === 12);
+  g.halvAnswer(0, 'över');
+  check('över: budhållaren behåller direkt', g.budAnnounced === 0 && g.halv === null && g.log.some(l => l.includes('har över och behåller')));
   const g2 = budGame();
   g2.players[0].hand = [C(2, SP), C(3, HJ), C(5, RU), C(7, KL), C(9, SP)];
   g2.announceBud(0);
@@ -139,7 +143,13 @@ function budScore(hand0) {
   const g3 = budGame();
   g3.players[0].hand = lika.slice(); g3.players[1].hand = lika.slice();
   g3.announceBud(0); g3.announceBud(1);
-  check('exakt lika hand är inte högre', g3.budAnnounced === 0);
+  check('exakt lika hand öppnar halvering', !!g3.halv && g3.halv.asker === 1);
+  let guardLika = 0;
+  while (g3.awaiting && g3.awaiting.action === 'halvAsk' && guardLika++ < 10) {
+    g3.halvAsk(1);
+    g3.halvAnswer(0, 'exakt');
+  }
+  check('identiska händer: budhållaren behåller', g3.budAnnounced === 0 && g3.halv === null && g3.log.some(l => l.includes('identiska')));
   const g4 = budGame();
   g4.players[0].hand = [C(13, SP), C(13, HJ), C(3, RU), C(9, KL), C(11, SP)];
   g4.players[1].hand = [C(2, SP), C(3, HJ), C(4, RU), C(5, KL), C(6, SP)];
@@ -159,24 +169,22 @@ function budScore(hand0) {
   g.players[1].hand = [C(11, SP), C(11, HJ), C(3, RU), C(8, KL), C(5, SP)];
   g.announceBud(0); g.announceBud(1);
   check('halvering öppnas vid samma par', !!g.halv && g.halv.comp === 0 && g.awaiting.player === 1);
-  g.halvAsk(1, 11);
-  check('frågan gäller paret', g.awaiting.action === 'halvAnswer' && g.awaiting.label === 'ditt par');
+  g.halvAsk(1);
+  check('frågan gäller paret vid delarens eget värde', g.awaiting.action === 'halvAnswer' && g.awaiting.label === 'ditt par' && g.awaiting.n === 11);
   g.halvAnswer(0, 'exakt');
   check('samma valör: vidare till högsta kortet efteråt', g.halv.comp === 1 && g.log.some(l => l.includes('högsta kortet efteråt')));
   g.halvAsk(1, 8);
   check('botens knektsvar är sant (7 under 8)', botHalvAnswer(g.players[0].hand, 8, 1) === 'under');
   g.halvAnswer(0, 'under');
-  g.halvDone(1);
-  check('delaren med högst kort tar budet', g.budAnnounced === 1 && g.budNote === 'övertog budet');
+  check('delaren med högst kort tar budet direkt', g.budAnnounced === 1 && g.budNote === 'övertog budet' && g.halv === null);
   const g2 = budGame();
   g2.players[0].hand = [C(11, SP), C(11, HJ), C(3, RU), C(7, KL), C(5, SP)];
   g2.players[1].hand = [C(12, SP), C(12, HJ), C(3, RU), C(7, KL), C(5, SP)];
   g2.announceBud(0); g2.announceBud(1);
-  g2.halvAsk(1, 11);
-  g2.halvAnswer(0, 'exakt');
-  check('högre par: ingen vidaregång', g2.halv.comp === 0);
-  g2.halvDone(1);
-  check('delaren tog budet trots samma lägre kort', g2.budAnnounced === 1);
+  g2.halvAsk(1);
+  check('frågan vid eget värde', g2.awaiting.n === 12);
+  g2.halvAnswer(0, 'över');
+  check('över: budhållaren behåller trots samma lägre kort', g2.budAnnounced === 0 && g2.halv === null);
   const g3 = budGame();
   g3.players[0].hand = [C(11, SP), C(11, HJ), C(3, RU), C(7, KL), C(5, SP)];
   g3.players[1].hand = [C(11, SP), C(11, HJ), C(3, RU), C(8, KL), C(5, SP)];
@@ -189,6 +197,22 @@ function budScore(hand0) {
   g3.halvAnswer(1, 'exakt');
   check('halvAnswer av fel spelare ignoreras', JSON.stringify(g3.awaiting) === before2);
   check('botHalvAsk följer comp', botHalvAsk(g3.players[1].hand, 0) === 11 && botHalvAsk(g3.players[1].hand, 1) === 8);
+  // Treor mot kungar i båda riktningarna: ett enda svar avgör
+  const g4 = budGame();
+  g4.players[0].hand = [C(13, SP), C(13, HJ), C(3, RU), C(9, KL), C(11, SP)];
+  g4.players[1].hand = [C(3, SP), C(3, HJ), C(5, RU), C(9, KL), C(11, SP)];
+  g4.announceBud(0); g4.announceBud(1);
+  g4.halvAsk(1);
+  check('lägre utmanare frågar vid sitt eget värde', g4.awaiting.n === 3);
+  g4.halvAnswer(0, 'över');
+  check('kungar mot treor: budhållaren behåller efter en fråga', g4.budAnnounced === 0 && g4.halv === null && g4.log.filter(l => l.includes('över eller under')).length === 1);
+  const g5 = budGame();
+  g5.players[0].hand = [C(3, SP), C(3, HJ), C(5, RU), C(9, KL), C(11, SP)];
+  g5.players[1].hand = [C(13, SP), C(13, HJ), C(3, RU), C(9, KL), C(11, SP)];
+  g5.announceBud(0); g5.announceBud(1);
+  g5.halvAsk(1);
+  g5.halvAnswer(0, 'under');
+  check('treor mot kungar: delaren tar budet efter en fråga', g5.budAnnounced === 1 && g5.halv === null && g5.log.filter(l => l.includes('över eller under')).length === 1);
 }
 
 // ============ E. Byte, öppet kort, talong ============
@@ -263,7 +287,7 @@ function trickGame(seed, hands, autoChicago = true, points1 = 0) {
     if (a.action === 'exchange') g.exchange(a.player, []);
     else if (a.action === 'bud') { const ev = evaluate5(g.players[a.player].hand); g.canBid(ev) ? g.announceBud(a.player) : g.budPass(a.player); }
     else if (a.action === 'chicago') { if (!autoChicago) break; g.passChicago(); }
-    else if (a.action === 'halvAsk') { (g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1)) ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)) : g.halvDone(a.player); }
+    else if (a.action === 'halvAsk') { g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)); }
     else if (a.action === 'halvAnswer') g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n, g.halv ? g.halv.comp : 0));
     else break;
   }
@@ -326,7 +350,7 @@ function trickGame(seed, hands, autoChicago = true, points1 = 0) {
     if (!a) break;
     if (a.action === 'exchange') g.exchange(a.player, []);
     else if (a.action === 'bud') { const ev = evaluate5(g.players[a.player].hand); g.canBid(ev) ? g.announceBud(a.player) : g.budPass(a.player); }
-    else if (a.action === 'halvAsk') { (g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1)) ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)) : g.halvDone(a.player); }
+    else if (a.action === 'halvAsk') { g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)); }
     else if (a.action === 'halvAnswer') g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n, g.halv ? g.halv.comp : 0));
     else break;
   }
@@ -372,8 +396,8 @@ function trickGame(seed, hands, autoChicago = true, points1 = 0) {
   const g2 = Game.fromJSON(g.toJSON());
   check('runtresa bevarar tillståndet exakt', JSON.stringify(g2.toJSON()) === snap);
   check('halv-state lever vidare', g2.halv && g2.halv.comp === 1 && g2.awaiting.action === 'halvAsk');
-  g2.halvAsk(1, 8); g2.halvAnswer(0, 'under'); g2.halvDone(1);
-  check('partiet spelar klart efter laddning', g2.budAnnounced === 1);
+  g2.halvAsk(1, 8); g2.halvAnswer(0, 'under');
+  check('partiet spelar klart efter laddning', g2.budAnnounced === 1 && g2.halv === null);
   check('fromJSON avvisar skräp', Game.fromJSON(null) === null && Game.fromJSON({ v: 2 }) === null);
   const g3 = trickGame(18, [[C(14, SP), C(5, RU), C(6, RU), C(7, RU), C(8, RU)], [C(2, SP), C(3, SP), C(4, SP), C(13, SP), C(12, SP)]]);
   g3.playCard(0, 1);
@@ -406,7 +430,10 @@ function trickGame(seed, hands, autoChicago = true, points1 = 0) {
     gb.budCat = bestCat; gb.budEv = bestEv; gb.budAnnounced = bestCat > 0 ? 1 : null;
     const bb = botBud(hand, bestCat, bestEv);
     const cb = gb.canBid(ev);
-    if ((bb !== null) !== cb || (bb !== null && bb !== ev.cat)) bad++;
+    const ms = gb.mustSay(ev);
+    // Boten får aldrig annonsera en otillåten hand och aldrig passa en tvingad
+    // annons; samma kategori är frivillig utmaning, därför är pass lagligt där.
+    if ((bb !== null && (bb !== ev.cat || !cb)) || (ms && bb === null)) bad++;
   }
   check('botBud speglar canBid (5000 drag)', bad === 0, bad);
   bad = 0;
@@ -450,7 +477,7 @@ function runGiv(g) {
       }
       case 'openOffer': g.resolveOpen(a.player, botOpenChoice(h, a.card, g.openOffer.idx)); break;
       case 'bud': { const ev = evaluate5(h); g.canBid(ev) ? g.announceBud(a.player) : g.budPass(a.player); break; }
-      case 'halvAsk': (g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1)) ? g.halvAsk(a.player, botHalvAsk(h, g.halv.comp)) : g.halvDone(a.player); break;
+      case 'halvAsk': g.halvAsk(a.player, botHalvAsk(h, g.halv.comp)); break;
       case 'halvAnswer': g.halvAnswer(a.player, botHalvAnswer(h, a.n, g.halv ? g.halv.comp : 0)); break;
       case 'fyrtalVal': g.fyrtalTake(a.player); break;
       case 'chicago': botWantsChicago(h, g.players[a.player].points) ? g.bidChicago(a.player) : g.passChicago(); break;
@@ -505,7 +532,7 @@ function simParty(seed, n) {
   for (let k = 0; k < 30000; k++) {
     const handA = rndHand(), handB = rndHand();
     const evA = evaluate5(handA), evB = evaluate5(handB);
-    if (!(evA.cat > 0 && evB.cat === evA.cat && compareHands(evB, evA) > 0)) continue;
+    if (!(evA.cat > 0 && evB.cat === evA.cat)) continue;
     halvCount++;
     const g = budGame();
     g.players[0].hand = handA; g.players[1].hand = handB;
@@ -513,14 +540,13 @@ function simParty(seed, n) {
     if (!(g.halv && g.halv.comp === 0)) { bad++; continue; }
     let guard = 0;
     while (g.awaiting && g.awaiting.action === 'halvAsk' && guard++ < 10) {
-      const askMore = g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1);
-      if (askMore) {
-        g.halvAsk(1, botHalvAsk(g.players[1].hand, g.halv.comp));
-        g.halvAnswer(0, botHalvAnswer(g.players[0].hand, g.awaiting.n, g.halv.comp));
-      } else { g.halvDone(1); break; }
+      g.halvAsk(1, botHalvAsk(g.players[1].hand, g.halv.comp));
+      g.halvAnswer(0, botHalvAnswer(g.players[0].hand, g.awaiting.n, g.halv.comp));
     }
-    if (g.awaiting && g.awaiting.action === 'halvAsk') g.halvDone(1);
-    if (g.budAnnounced !== 1 || g.budNote !== 'övertog budet') bad++;
+    const wantSign = compareHands(evB, evA) > 0 ? 1 : 0;
+    if (g.budAnnounced !== wantSign || (wantSign === 1 && g.budNote !== 'övertog budet')) bad++;
+    if (compareHands(evB, evA) < 0 && g.log.some(l => l.includes('har över och behåller')) === false) bad++;
+    if (compareHands(evB, evA) > 0 && g.log.some(l => l.includes('tar budet')) === false) bad++;
     if (evA.tie[0] === evB.tie[0] && evA.tie.length > 1) {
       knektCount++;
       if (!g.log.some(l => l.includes('högsta kortet efteråt'))) knektBad++;
