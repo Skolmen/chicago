@@ -10,9 +10,12 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .chip.subtle { opacity:.7; }
 #table { flex:1; display:flex; flex-direction:column; align-items:center; padding:0 12px; gap:8px; }
 #phaseLabel { font-weight:600; font-size:1rem; min-height:1.4em; text-align:center; }
-#botArea { display:flex; flex-direction:column; align-items:center; gap:6px; }
-#botCards { display:flex; gap:6px; min-height:calc(var(--card-h)*.62); }
-#botCards .card { width:calc(var(--card-w)*.62); height:calc(var(--card-h)*.62); }
+#botArea { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.botRow { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.botLabel { font-size:.8rem; opacity:.9; }
+.botRow .botCards { display:flex; gap:5px; min-height:calc(var(--card-h)*.62); }
+.botRow .botCards .card { width:calc(var(--card-w)*.62); height:calc(var(--card-h)*.62); }
+.scoreline.win strong { color:#8a6d00; }
 #logWrap { width:100%; display:flex; flex-direction:column; align-items:center; margin-top:6px; }
 #logToggle { position:relative; padding:6px 14px; font-size:.85rem; }
 #logToggle.new::after { content:''; position:absolute; top:4px; right:4px; width:8px; height:8px; border-radius:50%; background:#e0b23c; }

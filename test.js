@@ -37,6 +37,36 @@ function botMoveFor(i, game) {
   throw new Error('oväntad action ' + a.action);
 }
 
+for (let seed = 0; seed < 40; seed++) {
+  let rng = mulberry32(seed * 104729 + 7);
+  const game = new Game(['A', 'B', 'C'], rng);
+  let guard = 0;
+  game.start();
+  while (!game.over && guard++ < 3000) {
+    const a = game.awaiting;
+    if (!a) throw new Error('stilla utan att vara över, giv ' + game.giv + ' fas ' + game.phase);
+    if (a.action === 'nextGiv') { game.nextGiv(); continue; }
+    botMoveFor(a.player, game);
+  }
+  check(`spel 3p ${seed} avslutas`, game.over);
+  check(`spel 3p ${seed} vinnare >=52`, game.winner && game.winner.points >= RULES.target);
+}
+
+for (let seed = 0; seed < 40; seed++) {
+  let rng = mulberry32(seed * 15485863 + 3);
+  const game = new Game(['A', 'B', 'C', 'D'], rng);
+  let guard = 0;
+  game.start();
+  while (!game.over && guard++ < 3000) {
+    const a = game.awaiting;
+    if (!a) throw new Error('stilla utan att vara över, giv ' + game.giv + ' fas ' + game.phase);
+    if (a.action === 'nextGiv') { game.nextGiv(); continue; }
+    botMoveFor(a.player, game);
+  }
+  check(`spel 4p ${seed} avslutas`, game.over);
+  check(`spel 4p ${seed} vinnare >=52`, game.winner && game.winner.points >= RULES.target);
+}
+
 for (let seed = 0; seed < 300; seed++) {
   let rng = mulberry32(seed * 7919 + 13);
   const game = new Game(['A', 'B'], rng);
