@@ -212,6 +212,54 @@ function mulberry32(a) {
   g.announceBud(1);
   check('andra fyrtal ger 8 p direkt', g.players[0].points === 8 && g.phase === 'kop3');
 }
+
+{
+  // Regression: bruten Chicago för spelare 0 (bid 0 tolkades som falskt) och
+  // erbjudandeordning: erbjudandet börjar hos spelaren efter givaren.
+  let sawBroken = false, deltasOk = true;
+  for (let seed = 0; seed < 8; seed++) {
+    const rng = mulberry32(seed * 7919 + 13);
+    const g = new Game(['Du', 'Datorn'], rng);
+    g.start();
+    let givAtBid = null, p0Start = null, ended = false, guard = 0;
+    while (!g.over && guard++ < 1500) {
+      const a = g.awaiting;
+      if (!a) break;
+      if (a.action === 'nextGiv') { if (givAtBid === g.giv) { ended = true; break; } if (givAtBid != null) break; g.nextGiv(); continue; }
+      if (a.action === 'chicago') { if (a.player === 0) { givAtBid = g.giv; p0Start = g.players[0].points; g.bidChicago(0); } else g.passChicago(); continue; }
+      if (a.action === 'play') {
+        if (a.player === 0) {
+          const h = g.players[0].hand;
+          let idx = h.findIndex(c => c.r <= 6);
+          if (idx < 0) idx = h.reduce((m, c, j) => c.r < h[m].r ? j : m, 0);
+          if (a.mustSuit != null) { const s = h.findIndex(c => c.s === a.mustSuit && c.r <= 6); if (s >= 0) idx = s; }
+          g.playCard(0, idx);
+        } else {
+          g.playCard(1, botPlay({hand: g.players[1].hand, trickCards: g.trickCards, mustSuit: a.mustSuit, isBidder: false, opponentBid: true, trickNo: g.trickNo}));
+        }
+        continue;
+      }
+      if (a.action === 'exchange') { g.exchange(a.player, botExchange(g.players[a.player].hand)); continue; }
+      if (a.action === 'openOffer') { g.resolveOpen(a.player, botOpenChoice(g.players[a.player].hand, a.card, a.idx)); continue; }
+      if (a.action === 'bud') { const c = botBud(g.players[a.player].hand, a.bestCat, a.bestEv); c != null ? g.announceBud(a.player) : g.budPass(a.player); continue; }
+      if (a.action === 'fyrtalVal') { g.fyrtalTake(a.player); continue; }
+      throw new Error('oväntad action ' + a.action);
+    }
+    if (p0Start == null) continue;
+    const delta = g.players[0].points - p0Start;
+    if (delta === -15) { sawBroken = true; check(`bruten Chicago seed ${seed} avslutar given direkt`, ended); }
+    else if (delta !== 15) { deltasOk = false; console.error('FEL: delta', delta, 'seed', seed); }
+  }
+  check('bruten Chicago spelare 0 ger exakt -15 p (annars +15)', sawBroken && deltasOk);
+  const g2 = new Game(['Du', 'Datorn'], mulberry32(1));
+  g2.start();
+  g2.phase = 'chicago'; g2.chicagoAsked = new Set(); g2.bid = null;
+  g2.players[0].points = 20; g2.players[1].points = 20;
+  g2.step();
+  check('chicago erbjuds först till spelaren efter givaren', g2.awaiting && g2.awaiting.player === 1);
+  if (g2.awaiting && g2.awaiting.player === 1) { g2.passChicago(); check('efter tacka nej frågas spelare 0', g2.awaiting && g2.awaiting.player === 0); }
+}
+
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);
 
