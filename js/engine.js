@@ -25,6 +25,8 @@ export class Game {
     this.awaiting = null; // { player, action, ... } som väntar på input
     this.discard = [];    // slängda kort (dolt öppet kort hamnar här)
     this.openOffer = null; // { player, idx, card } när ett öppet kort erbjuds
+    this.budWhen = null; this.budNextPhase = null; this.budAnnounced = null; this.budCat = 0; this.budName = null;
+    this.budAsked = new Set(); this.budOrder = [];
     this.onEvent = null;
   }
 
@@ -44,6 +46,8 @@ export class Game {
     this.talong = deck;
     this.phase = 'kop1';
     this.exchanged = new Set();
+    this.budWhen = null; this.budNextPhase = null; this.budAnnounced = null; this.budCat = 0; this.budName = null;
+    this.budAsked = new Set(); this.budOrder = [];
     this.bid = null;
     this.chicagoAsked = new Set();
     this.trickNo = 0;
@@ -58,26 +62,60 @@ export class Game {
     this.step();
   }
 
-  scoreHands(when) {
-    const evs = this.players.map(p => evaluate5(p.hand));
-    let best = evs[0];
-    for (const e of evs) if (compareHands(e, best) > 0) best = e;
-    if (best.cat === 0) {
-      this.say(`Ingen har par eller bättre ${when}, ingen handpoäng.`);
-      this.emit({ type: 'score', when, scored: null });
-      return;
+  beginBud(when, nextPhase) {
+    this.phase = 'bud';
+    this.budWhen = when;
+    this.budNextPhase = nextPhase;
+    this.budAnnounced = null;
+    this.budCat = 0;
+    this.budName = null;
+    this.budAsked = new Set();
+    this.budOrder = [];
+    for (let k = 0; k < this.players.length; k++) this.budOrder.push((this.dealer + 1 + k) % this.players.length);
+    this.say(`Budgivning ${when}: ${this.players[this.budOrder[0]].name} säger först.`);
+    return this._step();
+  }
+
+  announceBud(i) {
+    if (this.phase !== 'bud' || !this.awaiting || this.awaiting.action !== 'bud' || this.awaiting.player !== i) return;
+    const ev = evaluate5(this.players[i].hand);
+    if (ev.cat > this.budCat) { // handkategori slår handkategori, exakta kort räknas inte i budet
+
+      this.budAnnounced = i;
+      this.budCat = ev.cat;
+      this.budName = handName(ev);
+      this.say(`${this.players[i].name} säger ${this.budName}.`);
+    } else {
+      this.say(`${this.players[i].name} är tyst.`);
     }
-    const holders = evs.map((e, i) => compareHands(e, best) === 0 ? i : -1).filter(i => i >= 0);
-    if (holders.length !== 1) {
-      this.say(`Lika bästa händer ${when}, ingen poäng.`);
-      this.emit({ type: 'score', when, scored: null, tie: true });
-      return;
+    this.awaiting = null;
+    if (this.budAsked.size < this.budOrder.length) return this.step();
+    return this.resolveBud();
+  }
+
+  budPass(i) {
+    if (this.phase !== 'bud' || !this.awaiting || this.awaiting.action !== 'bud' || this.awaiting.player !== i) return;
+    this.say(`${this.players[i].name} är tyst.`);
+    this.awaiting = null;
+    if (this.budAsked.size < this.budOrder.length) return this.step();
+    return this.resolveBud();
+  }
+
+  resolveBud() {
+    if (this.budAnnounced !== null) {
+      const wi = this.budAnnounced;
+      const pts = handPoints(evaluate5(this.players[wi].hand));
+      this.players[wi].points += pts;
+      this.players[wi].lastScoredCat = this.budCat;
+      this.say(`${this.players[wi].name} får ${pts} p för ${this.budName} ${this.budWhen}.`);
+      this.emit({ type: 'score', when: this.budWhen, player: wi, pts, name: this.budName, viaBud: true });
+    } else {
+      this.say(`Ingen bjuder ${this.budWhen}, ingen handpoäng.`);
+      this.emit({ type: 'score', when: this.budWhen, scored: null });
     }
-    const pts = handPoints(best), wi = holders[0];
-    this.players[wi].points += pts;
-    this.players[wi].lastScoredCat = best.cat;
-    this.say(`${this.players[wi].name} får ${pts} p för ${handName(best)} ${when}.`);
-    this.emit({ type: 'score', when, player: wi, pts, name: handName(best) });
+    this.phase = this.budNextPhase;
+    this.awaiting = null;
+    return this.step(); // via step() så att "väntar på X"-händelsen når gränssnittet
   }
 
   exchange(i, idxs) {
@@ -187,14 +225,21 @@ export class Game {
     if (this.phase === 'kop1' || this.phase === 'kop2' || this.phase === 'kop3') {
       const next = this.players.findIndex((p, i) => !this.exchanged.has(i) && !p.kopstopp);
       if (next === -1) {
-        if (this.phase === 'kop1') { this.scoreHands('efter första köpet'); this.phase = 'kop2'; this.exchanged = new Set(); return this._step(); }
-        if (this.phase === 'kop2') { this.scoreHands('efter andra köpet'); this.phase = 'kop3'; this.exchanged = new Set(); return this._step(); }
+        if (this.phase === 'kop1') { this.exchanged = new Set(); return this.beginBud('efter första bytet', 'kop2'); }
+        if (this.phase === 'kop2') { this.exchanged = new Set(); return this.beginBud('efter andra bytet', 'kop3'); }
         this.sluthand = this.players.map(p => p.hand.slice());
         this.phase = 'chicago';
         this.chicagoAsked = new Set();
         return this._step();
       }
       this.awaiting = { player: next, action: 'exchange' };
+      return;
+    }
+    if (this.phase === 'bud') {
+      const next = this.budOrder.find(i => !this.budAsked.has(i));
+      if (next === undefined) return this.resolveBud();
+      this.budAsked.add(next);
+      this.awaiting = { player: next, action: 'bud', bestCat: this.budCat, bestName: this.budName };
       return;
     }
     if (this.phase === 'chicago') {
@@ -286,6 +331,8 @@ export class Game {
       trickNo: this.trickNo, trickCards: this.trickCards, tricksWon: this.tricksWon,
       leader: this.leader, sluthand: this.sluthand, over: this.over,
       discard: this.discard, openOffer: this.openOffer,
+      budWhen: this.budWhen, budNextPhase: this.budNextPhase, budAnnounced: this.budAnnounced,
+      budCat: this.budCat, budName: this.budName, budAsked: [...this.budAsked], budOrder: this.budOrder,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
       log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
@@ -299,6 +346,8 @@ export class Game {
     g.trickNo = d.trickNo; g.trickCards = d.trickCards || []; g.tricksWon = d.tricksWon;
     g.leader = d.leader; g.sluthand = d.sluthand; g.over = d.over;
     g.winner = d.winner === null ? null : g.players[d.winner];
+    g.budWhen = d.budWhen || null; g.budNextPhase = d.budNextPhase || null; g.budAnnounced = (d.budAnnounced === null || d.budAnnounced === undefined) ? null : d.budAnnounced;
+    g.budCat = d.budCat || 0; g.budName = d.budName || null; g.budAsked = new Set(d.budAsked || []); g.budOrder = d.budOrder || [];
     g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
     g.discard = d.discard || []; g.openOffer = d.openOffer || null;
     return g;

@@ -67,6 +67,12 @@ export function botPlay({ hand, trickCards, mustSuit, isBidder, opponentBid, tri
   return lowest();
 }
 
+// Budgivning: boten säger sin hand ärligt bara om den slår aktuellt bud, annars tyst (null).
+export function botBud(hand, bestCat) {
+  const ev = evaluate5(hand);
+  return ev.cat > bestCat ? ev.cat : null;
+}
+
 // Ska boten ta det öppna kortet? Ta det om det minst behåller handens kategori.
 export function botOpenChoice(hand, openCard, idx) {
   const remaining = hand.filter((_, k) => k !== idx);

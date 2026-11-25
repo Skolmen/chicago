@@ -1,8 +1,8 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
 import { Game, RULES } from './engine.js';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice } from './bot.js';
-import { SUITS, rankLabel, cardLabel } from './poker.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud } from './bot.js';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName } from './poker.js';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -58,7 +58,7 @@ function render() {
   if (!game) return;
   const p = game.players, a = game.awaiting;
   el.givLabel.textContent = `Giv ${game.giv} · ${p[game.dealer].name} ger`;
-  const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
+  const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', bud: 'Budgivning', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
   el.phaseLabel.textContent = (phaseNames[game.phase] || '') + (game.bid !== null && game.bid !== undefined ? ` – ${p[game.bid].name} har budat Chicago` : '');
   el.talongInfo && (el.talongInfo.textContent = `Talong: ${game.talong.length} kort`);
 
@@ -175,6 +175,11 @@ function render() {
       el.tableMsg.textContent = 'Ta det öppna kortet, eller släng det och dra ett stängt.';
       el.actions.appendChild(button('Ta det öppna kortet', 'primary', () => { game.resolveOpen(HUMAN, true); selected = new Set(); }));
       el.actions.appendChild(button('Släng det och dra ett stängt', '', () => { game.resolveOpen(HUMAN, false); selected = new Set(); }));
+    } else if (a.action === 'bud') {
+      const mine = evaluate5(game.players[HUMAN].hand);
+      el.tableMsg.textContent = a.bestName ? `Redan sagt: ${a.bestName}.` : 'Ingen har sagt något ännu. Säg vad du har, eller var tyst.';
+      if (mine.cat > a.bestCat) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
+      el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
     } else if (a.action === 'chicago') {
       el.tableMsg.textContent = 'Du kan buda Chicago: lova att ta alla fem stick.';
       el.actions.appendChild(button('Buda Chicago', 'primary danger', () => game.bidChicago(HUMAN)));
@@ -236,6 +241,7 @@ function maybeBot() {
     const i = cur.player;
     if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
+    else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat) != null ? game.announceBud(i) : game.budPass(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
     else if (cur.action === 'play') {
       const j = botPlay({
