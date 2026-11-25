@@ -54,6 +54,8 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 
 /* Öppet kort vid byte */
 .openrow { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+.openrow .card.botThink { animation: openpulse 1.6s ease-in-out; box-shadow: 0 0 0 3px #e0b23c; }
+@keyframes openpulse { 50% { transform: scale(1.14); } }
 .openrow .card { width: min(13vw, 50px); height: calc(min(13vw, 50px) * 1.45); font-size: 13px; }
 .openrow span { font-size: 13px; opacity: .85; }
 /* Ställning i menyn */
