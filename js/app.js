@@ -2,7 +2,7 @@
 
 import { Game, RULES } from './engine.js';
 import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud } from './bot.js';
-import { SUITS, rankLabel, cardLabel, evaluate5, handName } from './poker.js';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands } from './poker.js';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -17,7 +17,7 @@ let selected = new Set();
 let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logToggle', 'logCount']) {
+for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logDrawer', 'logBackdrop', 'logClose', 'openCard', 'menuDot']) {
   el[id] = document.getElementById(id);
 }
 
@@ -58,7 +58,7 @@ function render() {
   if (!game) return;
   const p = game.players, a = game.awaiting;
   el.givLabel.textContent = `Giv ${game.giv} · ${p[game.dealer].name} ger`;
-  const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', bud: 'Budgivning', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
+  const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', bud: 'Budgivning', fyrtalVal: 'Fyrtal eller nollställ', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
   el.phaseLabel.textContent = (phaseNames[game.phase] || '') + (game.bid !== null && game.bid !== undefined ? ` – ${p[game.bid].name} har budat Chicago` : '');
   el.talongInfo && (el.talongInfo.textContent = `Talong: ${game.talong.length} kort`);
 
@@ -89,18 +89,15 @@ function render() {
     el.botArea.appendChild(row);
   }
 
-  // Loggen: hopfällbar panel, räknare på knappen, prick vid nyheter
-  if (logOpen) {
-    el.log.innerHTML = '';
-    for (const line of game.log) {
-      const d = document.createElement('div');
-      d.textContent = line;
-      el.log.appendChild(d);
-    }
-    el.log.scrollTop = el.log.scrollHeight;
+  // Loggen: sidomeny, prick på menyknappen vid nyheter
+  el.log.innerHTML = '';
+  for (const line of game.log) {
+    const d = document.createElement('div');
+    d.textContent = line;
+    el.log.appendChild(d);
   }
-  el.logCount.textContent = game.log.length;
-  el.logToggle.classList.toggle('new', !logOpen && game.log.length > lastSeenLog);
+  el.log.scrollTop = el.log.scrollHeight;
+  if (el.menuDot) el.menuDot.classList.toggle('hidden', !(game.log.length > lastSeenLog));
 
   // Spelade kort i sticket (pågående, annars förra sticket svagt)
   if (el.trickArea) {
@@ -128,6 +125,20 @@ function render() {
     }
   }
 
+  // Öppet kort mitt på spelplanen
+  if (el.openCard) {
+    el.openCard.innerHTML = '';
+    if (a && a.action === 'openOffer') {
+      const lbl = document.createElement('span');
+      lbl.className = 'openlbl';
+      lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer...');
+      const oc = cardEl(a.card);
+      if (a.player !== HUMAN) oc.classList.add('botThink');
+      el.openCard.appendChild(lbl);
+      el.openCard.appendChild(oc);
+    }
+  }
+
   // Spelarens hand
   el.playerCards.innerHTML = '';
   const hand = p[HUMAN].hand;
@@ -152,16 +163,10 @@ function render() {
   // Knappar
   el.actions.innerHTML = '';
   if (game.over) return;
-  if (a && a.action === 'openOffer') {
-    const row = document.createElement('div');
-    row.className = 'openrow';
-    const oc = cardEl(a.card);
-    if (a.player !== HUMAN) oc.classList.add('botThink');
-    row.appendChild(oc);
-    const lbl = document.createElement('span');
-    lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer...');
-    row.appendChild(lbl);
-    el.actions.appendChild(row);
+  if (a && a.action === 'fyrtalVal' && a.player === HUMAN) {
+    el.tableMsg.textContent = game.fyrtalZeroUsed ? `Fyrtal: ta ${game.fyrtalPending.pts} p.` : 'Fyrtal! Ta poängen, eller nollställ alla poäng (bara en gång per parti).';
+    el.actions.appendChild(button(`Ta ${game.fyrtalPending.pts} p`, 'primary', () => game.fyrtalTake(HUMAN)));
+    if (!game.fyrtalZeroUsed) el.actions.appendChild(button('Nollställ alla poäng', 'danger', () => game.fyrtalZero(HUMAN)));
   }
   if (a && a.player === HUMAN) {
     if (a.action === 'exchange') {
@@ -177,9 +182,11 @@ function render() {
       el.actions.appendChild(button('Släng det och dra ett stängt', '', () => { game.resolveOpen(HUMAN, false); selected = new Set(); }));
     } else if (a.action === 'bud') {
       const mine = evaluate5(game.players[HUMAN].hand);
-      el.tableMsg.textContent = a.bestName ? `Redan sagt: ${a.bestName}.` : 'Ingen har sagt något ännu. Säg vad du har, eller var tyst.';
-      if (mine.cat > a.bestCat) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
-      el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
+      const bestEv = a.bestEv || null;
+      const kanBjuda = a.bestCat === 0 ? mine.cat > 0 : (mine.cat > a.bestCat || (mine.cat === a.bestCat && bestEv && compareHands(mine, bestEv) > 0));
+      el.tableMsg.textContent = (a.bestName ? `Redan sagt: ${a.bestName}. ` : 'Ingen har sagt något ännu. ') + (kanBjuda ? 'Tjuvpassning är förbjuden, du måste säga.' : 'Du kan vara tyst.');
+      if (kanBjuda) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
+      else el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
     } else if (a.action === 'chicago') {
       el.tableMsg.textContent = 'Du kan buda Chicago: lova att ta alla fem stick.';
       el.actions.appendChild(button('Buda Chicago', 'primary danger', () => game.bidChicago(HUMAN)));
@@ -241,7 +248,8 @@ function maybeBot() {
     const i = cur.player;
     if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
-    else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat) != null ? game.announceBud(i) : game.budPass(i);
+    else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat, cur.bestEv) != null ? game.announceBud(i) : game.budPass(i);
+    else if (cur.action === 'fyrtalVal') game.fyrtalTake(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
     else if (cur.action === 'play') {
       const j = botPlay({
@@ -347,10 +355,26 @@ function showMenu(title) {
   if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
   btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => showNewGame()));
+  btns.push(button(`Logg${game && game.log.length ? ` (${game.log.length})` : ''}`, '', openLog));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   let head = `<h2>${title || 'Meny'}</h2>`;
   if (game && !game.over) head += standingsHtml();
   showOverlay(head, btns);
+}
+
+// --- Loggen som sidomeny ---
+function openLog() {
+  logOpen = true;
+  lastSeenLog = game ? game.log.length : 0;
+  if (el.logDrawer) el.logDrawer.classList.remove('hidden');
+  if (el.logBackdrop) el.logBackdrop.classList.remove('hidden');
+  render();
+}
+function closeLog() {
+  logOpen = false;
+  if (el.logDrawer) el.logDrawer.classList.add('hidden');
+  if (el.logBackdrop) el.logBackdrop.classList.add('hidden');
+  render();
 }
 
 // --- Vakt: om en händelse skulle gå förlorad körs datorns tur ändå ---
@@ -363,11 +387,8 @@ function boot() {
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   el.menuBtn = document.getElementById('menuBtn');
   if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
-  if (el.logToggle) el.logToggle.addEventListener('click', () => {
-    logOpen = !logOpen;
-    el.log.classList.toggle('hidden', !logOpen);
-    if (logOpen) { lastSeenLog = game ? game.log.length : 0; el.logToggle.classList.remove('new'); render(); }
-  });
+  if (el.logClose) el.logClose.addEventListener('click', closeLog);
+  if (el.logBackdrop) el.logBackdrop.addEventListener('click', closeLog);
   const saved = restoreGame();
   if (saved && !saved.over) {
     game = saved; game.onEvent = handleEvent;

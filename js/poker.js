@@ -49,15 +49,14 @@ export function evaluate5(cards) {
 }
 
 export const CAT_NAMES = ['Hög hand', 'Par', 'Två par', 'Triss', 'Stege', 'Färg', 'Kåk', 'Fyrtal', 'Färgstege'];
-const CAT_POINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const CAT_POINTS = [0, 1, 2, 3, 4, 5, 6, 8, 52]; // fyrtal 8, färgstege 52
 
 export function handPoints(ev) {
-  if (ev.cat === 8 && ev.tie[0] === 14) return 52; // royal straight flush
   return CAT_POINTS[ev.cat];
 }
 
 export function handName(ev) {
-  return (ev.cat === 8 && ev.tie[0] === 14) ? 'Royal straight flush' : CAT_NAMES[ev.cat];
+  return CAT_NAMES[ev.cat];
 }
 
 // Positivt = a slår b, 0 = exakt lika, negativt = b slår a.
