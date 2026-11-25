@@ -29,6 +29,7 @@ export class Game {
     this.budAsked = new Set(); this.budOrder = [];
     this.budEv = null;
     this.fyrtalZeroUsed = false; this.fyrtalPending = null; this.fyrtalResume = null;
+    this.bid = null; this.chicagoAsked = new Set();
     this.onEvent = null;
   }
 
@@ -265,7 +266,7 @@ export class Game {
     this.trickNo = 0;
     this.trickCards = [];
     this.leader = (this.dealer + 1) % this.players.length;
-    if (this.bid) this.say(`Sticken börjar. ${this.players[this.bid].name} måste ta alla fem.`);
+    if (this.bid != null) this.say(`Sticken börjar. ${this.players[this.bid].name} måste ta alla fem.`);
     this.step();
   }
 
@@ -306,10 +307,18 @@ export class Game {
       return;
     }
     if (this.phase === 'chicago') {
-      const next = this.players.findIndex((p, i) => !this.chicagoAsked.has(i) && p.points >= RULES.chicagoMin);
-      if (next === -1 || this.bid !== null) { this.beginTricks(); return; }
-      this.chicagoAsked.add(next);
-      this.awaiting = { player: next, action: 'chicago' };
+      if (this.bid != null) { this.beginTricks(); return; }
+      const n = this.players.length;
+      for (let k = 1; k <= n; k++) {
+        const i = (this.dealer + k) % n;
+        if (this.chicagoAsked.has(i)) continue;
+        this.chicagoAsked.add(i);
+        if (this.players[i].points >= RULES.chicagoMin) {
+          this.awaiting = { player: i, action: 'chicago' };
+          return;
+        }
+      }
+      this.beginTricks();
       return;
     }
     if (this.phase === 'tricks') {
@@ -322,7 +331,7 @@ export class Game {
         this.say(`${this.players[winIdx].name} tar stick ${this.trickNo + 1} med ${cardLabel(winCard)}.`);
         this.trickCards = [];
         this.trickNo++;
-        if (this.bid && winIdx !== this.bid) { this.endGiv('broken'); return; }
+        if (this.bid != null && winIdx !== this.bid) { this.endGiv('broken'); return; }
         this.leader = winIdx;
         if (this.trickNo === 5) { this.endGiv('normal', winIdx); return; }
       }
