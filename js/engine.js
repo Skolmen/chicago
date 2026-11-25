@@ -95,14 +95,26 @@ export class Game {
     const discard = new Set(idxs);
     const removed = p.hand.filter((c, k) => discard.has(k));
     p.hand = p.hand.filter((c, k) => !discard.has(k));
-    const draw = Math.min(removed.length, this.talong.length);
-    for (let d = 0; d < draw; d++) p.hand.push(this.talong.pop());
+    this.discard.push(...removed);
+    for (let d = 0; d < removed.length; d++) {
+      this.refillTalong();
+      if (!this.talong.length) break;
+      p.hand.push(this.talong.pop());
+    }
     this.exchanged.add(i);
     const mustShow = removed.length > 0 && p.lastScoredCat >= 1;
     this.awaiting = null;
     this.emit({ type: 'exchange', player: i, count: removed.length, mustShow });
     this.say(`${p.name} byter ${removed.length} kort${mustShow ? ' (visar byteskorten)' : ''}.`);
     this.step();
+  }
+
+  refillTalong() {
+    if (this.talong.length || !this.discard.length) return;
+    this.talong = shuffle(this.discard, this.rng);
+    this.discard = [];
+    this.say(`Talongen tog slut. Skräphögen (${this.talong.length} kort) blandas till ny talong.`);
+    this.emit({ type: 'reshuffle' });
   }
 
   resolveOpen(i, take) {
@@ -121,6 +133,7 @@ export class Game {
     } else {
       const open = this.talong.pop();
       this.discard.push(open);
+      this.refillTalong();
       if (this.talong.length) {
         p.hand.push(this.talong.pop());
         this.say(`${p.name} slängde det öppna kortet och tog ett stängt.`);

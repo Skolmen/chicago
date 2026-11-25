@@ -175,3 +175,18 @@ process.exit(failures === 0 ? 0 : 1);
 // Botens val: öppet kort som behåller kategorin tas
 check('bot tar gynnande öppet', botOpenChoice([C(5, S), C(5, H), C(9, D), C(11, K), C(2, S)], C(5, D), 4) === true);
 check('bot nekar sämre öppet', botOpenChoice([C(5, S), C(5, H), C(9, D), C(11, K), C(13, S)], C(3, K), 4) === false);
+{
+  // skräphögen blandas när talongen tar slut (issue 38)
+  const g = new Game(['Du', 'Datorn'], mulberry32(7));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(3, H), C(5, D), C(9, K), C(11, S)];
+  g.talong = [C(4, S)];
+  g.discard = [C(6, D), C(8, K), C(10, S), C(12, H), C(13, D), C(15, K)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  const logBefore = g.log.length;
+  g.exchange(0, [0, 1, 2]);
+  check('skräphögen blandas', g.log.some(l => l.includes('blandas')));
+  check('handen fylld igen', g.players[0].hand.length === 5);
+  check('talong fylld om från skräphögen', g.talong.length === 7);
+  check('discard tömd', g.discard.length === 0);
+}
