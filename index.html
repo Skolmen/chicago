@@ -7,7 +7,7 @@
 <title>Chicago – kortspel online</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=12">
 </head>
 <body>
 <header>
@@ -28,7 +28,10 @@
   </div>
   <div id="playerChips"></div>
   <div id="trickArea"></div>
-  <div id="log"></div>
+  <div id="logWrap">
+    <button id="logToggle" class="chip">Logg <span id="logCount"></span></button>
+    <div id="log" class="hidden"></div>
+  </div>
   <div id="tableMsg"></div>
 </section>
 <section id="playerArea">
@@ -36,6 +39,6 @@
   <div id="actions"></div>
 </section>
 <div id="overlay" class="hidden"><div id="overlayContent"></div></div>
-<script type="module" src="js/app.js?v=11"></script>
+<script type="module" src="js/app.js?v=12"></script>
 </body>
 </html>
