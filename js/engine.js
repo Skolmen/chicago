@@ -27,6 +27,8 @@ export class Game {
     this.openOffer = null; // { player, idx, card } när ett öppet kort erbjuds
     this.budWhen = null; this.budNextPhase = null; this.budAnnounced = null; this.budCat = 0; this.budName = null;
     this.budAsked = new Set(); this.budOrder = [];
+    this.budEv = null;
+    this.fyrtalZeroUsed = false; this.fyrtalPending = null; this.fyrtalResume = null;
     this.onEvent = null;
   }
 
@@ -48,6 +50,8 @@ export class Game {
     this.exchanged = new Set();
     this.budWhen = null; this.budNextPhase = null; this.budAnnounced = null; this.budCat = 0; this.budName = null;
     this.budAsked = new Set(); this.budOrder = [];
+    this.budEv = null;
+    this.fyrtalPending = null; this.fyrtalResume = null;
     this.bid = null;
     this.chicagoAsked = new Set();
     this.trickNo = 0;
@@ -76,15 +80,25 @@ export class Game {
     return this._step();
   }
 
+  // Får spelaren buda med den här handen? Tjuvpassning är förbjuden: slår
+  // handen det aktuella budet, eller likar det med högre kort, måste det sägas.
+  canBid(ev) {
+    if (this.budCat === 0) return ev.cat > 0;
+    if (ev.cat > this.budCat) return true;
+    return ev.cat === this.budCat && !!this.budEv && compareHands(ev, this.budEv) > 0;
+  }
+
   announceBud(i) {
     if (this.phase !== 'bud' || !this.awaiting || this.awaiting.action !== 'bud' || this.awaiting.player !== i) return;
     const ev = evaluate5(this.players[i].hand);
-    if (ev.cat > this.budCat) { // handkategori slår handkategori, exakta kort räknas inte i budet
-
+    if (this.canBid(ev)) {
+      const sameCat = this.budCat === ev.cat && this.budAnnounced !== null;
+      const prev = sameCat ? this.players[this.budAnnounced].name : null;
       this.budAnnounced = i;
       this.budCat = ev.cat;
       this.budName = handName(ev);
-      this.say(`${this.players[i].name} säger ${this.budName}.`);
+      this.budEv = { cat: ev.cat, tie: ev.tie.slice() };
+      this.say(prev ? `${this.players[i].name} säger ${this.budName} (högre än ${prev}).` : `${this.players[i].name} säger ${this.budName}.`);
     } else {
       this.say(`${this.players[i].name} är tyst.`);
     }
@@ -95,6 +109,11 @@ export class Game {
 
   budPass(i) {
     if (this.phase !== 'bud' || !this.awaiting || this.awaiting.action !== 'bud' || this.awaiting.player !== i) return;
+    const ev = evaluate5(this.players[i].hand);
+    if (this.canBid(ev)) { // tjuvpassning: handen måste sägas
+      this.say(`${this.players[i].name} får inte tjuvpassa, ${handName(ev)} måste sägas.`);
+      return; // samma spelare väntar fortfarande
+    }
     this.say(`${this.players[i].name} är tyst.`);
     this.awaiting = null;
     if (this.budAsked.size < this.budOrder.length) return this.step();
@@ -105,6 +124,15 @@ export class Game {
     if (this.budAnnounced !== null) {
       const wi = this.budAnnounced;
       const pts = handPoints(evaluate5(this.players[wi].hand));
+      if (this.budCat === 7 && !this.fyrtalZeroUsed) {
+        // Fyrtal: 8 p eller nollställ alla (bara en gång per parti)
+        this.fyrtalPending = { player: wi, pts, name: this.budName, source: 'bud' };
+        this.fyrtalResume = { source: 'bud', phase: this.budNextPhase };
+        this.phase = 'fyrtalVal';
+        this.awaiting = { player: wi, action: 'fyrtalVal' };
+        this.emit({ type: 'await', awaiting: this.awaiting });
+        return;
+      }
       this.players[wi].points += pts;
       this.players[wi].lastScoredCat = this.budCat;
       this.say(`${this.players[wi].name} får ${pts} p för ${this.budName} ${this.budWhen}.`);
@@ -116,6 +144,39 @@ export class Game {
     this.phase = this.budNextPhase;
     this.awaiting = null;
     return this.step(); // via step() så att "väntar på X"-händelsen når gränssnittet
+  }
+
+  fyrtalTake(i) {
+    if (this.phase !== 'fyrtalVal' || !this.awaiting || this.awaiting.action !== 'fyrtalVal' || this.awaiting.player !== i || !this.fyrtalPending) return;
+    const f = this.fyrtalPending;
+    this.players[f.player].points += f.pts;
+    this.players[f.player].lastScoredCat = 7;
+    this.say(`${this.players[f.player].name} tar ${f.pts} p för ${f.name}.`);
+    this.emit({ type: 'score', player: f.player, pts: f.pts, name: f.name });
+    this.fyrtalPending = null;
+    this.awaiting = null;
+    return this.afterFyrtal();
+  }
+
+  // Fyrtal kan i stället för poängen nollställa alla poäng, en gång per parti.
+  fyrtalZero(i) {
+    if (this.phase !== 'fyrtalVal' || !this.awaiting || this.awaiting.action !== 'fyrtalVal' || this.awaiting.player !== i || !this.fyrtalPending || this.fyrtalZeroUsed) return;
+    const f = this.fyrtalPending;
+    this.fyrtalZeroUsed = true;
+    for (const pl of this.players) { pl.points = 0; pl.kopstopp = false; }
+    this.say(`${this.players[i].name} nollställer alla poäng i stället för att ta ${f.pts} p för ${f.name}! Bara en gång per parti.`);
+    this.emit({ type: 'score', player: i, pts: 0, name: 'Nollställning' });
+    this.fyrtalPending = null;
+    this.awaiting = null;
+    return this.afterFyrtal();
+  }
+
+  afterFyrtal() {
+    const r = this.fyrtalResume;
+    this.fyrtalResume = null;
+    if (!r) return;
+    if (r.source === 'bud') { this.phase = r.phase; return this.step(); }
+    return this.finishEndGiv();
   }
 
   exchange(i, idxs) {
@@ -239,7 +300,7 @@ export class Game {
       const next = this.budOrder.find(i => !this.budAsked.has(i));
       if (next === undefined) return this.resolveBud();
       this.budAsked.add(next);
-      this.awaiting = { player: next, action: 'bud', bestCat: this.budCat, bestName: this.budName };
+      this.awaiting = { player: next, action: 'bud', bestCat: this.budCat, bestName: this.budName, bestEv: this.budEv };
       return;
     }
     if (this.phase === 'chicago') {
@@ -274,12 +335,25 @@ export class Game {
     if (kind === 'normal') {
       this.players[lastWinner].points += RULES.lastTrick;
       this.say(`${this.players[lastWinner].name} tar sista sticket: +${RULES.lastTrick} p.`);
+      if (this.bid !== null && this.bid === lastWinner) {
+        this.players[this.bid].points += RULES.chicagoGain;
+        this.say(`${this.players[this.bid].name} lyckades med Chicago-budet: +${RULES.chicagoGain} p!`);
+      }
       const evs = this.sluthand.map(h => evaluate5(h));
       let best = evs[0];
       for (const e of evs) if (compareHands(e, best) > 0) best = e;
       if (best.cat > 0) {
         const holders = evs.map((e, i) => compareHands(e, best) === 0 ? i : -1).filter(i => i >= 0);
         if (holders.length === 1) {
+          if (best.cat === 7 && !this.fyrtalZeroUsed) {
+            // Fyrtal i sluthanden: 8 p eller nollställ alla (bara en gång per parti)
+            this.fyrtalPending = { player: holders[0], pts: handPoints(best), name: handName(best), source: 'sluthand' };
+            this.fyrtalResume = { source: 'sluthand' };
+            this.phase = 'fyrtalVal';
+            this.awaiting = { player: holders[0], action: 'fyrtalVal' };
+            this.emit({ type: 'await', awaiting: this.awaiting });
+            return;
+          }
           const pts = handPoints(best);
           this.players[holders[0]].points += pts;
           this.say(`Sluthand: ${this.players[holders[0]].name} får ${pts} p för ${handName(best)}.`);
@@ -287,14 +361,14 @@ export class Game {
           this.say('Lika bästa sluthänder, ingen poäng.');
         }
       }
-      if (this.bid !== null && this.bid === lastWinner) {
-        this.players[this.bid].points += RULES.chicagoGain;
-        this.say(`${this.players[this.bid].name} lyckades med Chicago-budet: +${RULES.chicagoGain} p!`);
-      }
     } else {
       this.players[this.bid].points -= RULES.chicagoLoss;
       this.say(`Chicago-budet bröts. ${this.players[this.bid].name} får −${RULES.chicagoLoss} p och given avslutas direkt.`);
     }
+    this.finishEndGiv();
+  }
+
+  finishEndGiv() {
     for (const p of this.players) {
       if (p.points >= RULES.kopstopp && !p.kopstopp) {
         p.kopstopp = true;
@@ -333,6 +407,7 @@ export class Game {
       discard: this.discard, openOffer: this.openOffer,
       budWhen: this.budWhen, budNextPhase: this.budNextPhase, budAnnounced: this.budAnnounced,
       budCat: this.budCat, budName: this.budName, budAsked: [...this.budAsked], budOrder: this.budOrder,
+      budEv: this.budEv, fyrtalZeroUsed: this.fyrtalZeroUsed, fyrtalPending: this.fyrtalPending, fyrtalResume: this.fyrtalResume,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
       log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
@@ -348,6 +423,7 @@ export class Game {
     g.winner = d.winner === null ? null : g.players[d.winner];
     g.budWhen = d.budWhen || null; g.budNextPhase = d.budNextPhase || null; g.budAnnounced = (d.budAnnounced === null || d.budAnnounced === undefined) ? null : d.budAnnounced;
     g.budCat = d.budCat || 0; g.budName = d.budName || null; g.budAsked = new Set(d.budAsked || []); g.budOrder = d.budOrder || [];
+    g.budEv = d.budEv || null; g.fyrtalZeroUsed = !!d.fyrtalZeroUsed; g.fyrtalPending = d.fyrtalPending || null; g.fyrtalResume = d.fyrtalResume || null;
     g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
     g.discard = d.discard || []; g.openOffer = d.openOffer || null;
     return g;

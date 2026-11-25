@@ -6,7 +6,8 @@ Kortspelet Chicago (svenska regler) i webbläsaren, mobilanpassat. Spela mot dat
 
 - 2–4 spelare, 52 kort utan jokrar, 5 kort var, resten är talong.
 - Varje giv: tre köprundor (byt valfritt antal kort, dra lika många), sedan fem stick utan trumf. Följ utspelsfärgen om du kan, högsta kortet i utspelsfärgen vinner.
-- Poäng för bästa pokerhand efter köp 1, köp 2 och efter sticken (sluthand). Par 1, två par 2, triss 3, stege 4, färg 5, kåk 6, fyrtal 7, färgstege 8, royal straight flush 52. Exakt lika bästa händer ger ingen poäng, och inga poäng utan par eller bättre.
+- Poäng för bästa pokerhand efter köp 1, köp 2 och efter sticken (sluthand). Par 1, två par 2, triss 3, stege 4, färg 5, kåk 6, fyrtal 8, färgstege 52 (royal räknas som färgstege). Exakt lika bästa händer ger ingen poäng, och inga poäng utan par eller bättre. Fyrtal kan i stället för 8 p nollställa alla poäng, men det får bara göras en gång per parti.
+- Budgivning efter första och andra bytet: den som sitter efter givaren säger först, sedan går det runt. Säg din handkategori eller var tyst, men tjuvpassning är förbjudet: en hand som slår budet, eller likar det med högre kort, måste sägas. Samma kategori jämförs och högst hand tar budet.
 - Sista sticket ger 5 poäng. Först till 52 poäng när given är färdig vinner; flera över 52: högsta total vinner.
 - Köpstopp: vid minst 46 poäng efter avslutad giv byter man inte kort i senare givar.
 - Chicago-bud: åtagande att ta alla fem stick, kräver minst 15 poäng. Lyckat: +15. Bruten (motståndare tar ett stick): −15 och given avslutas direkt utan poäng för sista sticket eller sluthand.

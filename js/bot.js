@@ -1,6 +1,6 @@
 // Enkel bot: heuristiker för byte, Chicago-bud och stickspel.
 
-import { evaluate5 } from './poker.js';
+import { evaluate5, compareHands } from './poker.js';
 
 // Vilka kort som ska bytas: behåll kort som bidrar till par/triss, färgdrag
 // eller stegdrag. Returnerar index i handen att slänga.
@@ -68,9 +68,10 @@ export function botPlay({ hand, trickCards, mustSuit, isBidder, opponentBid, tri
 }
 
 // Budgivning: boten säger sin hand ärligt bara om den slår aktuellt bud, annars tyst (null).
-export function botBud(hand, bestCat) {
+export function botBud(hand, bestCat, bestEv = null) {
   const ev = evaluate5(hand);
-  return ev.cat > bestCat ? ev.cat : null;
+  const kan = bestCat === 0 ? ev.cat > 0 : (ev.cat > bestCat || (ev.cat === bestCat && bestEv && compareHands(ev, bestEv) > 0));
+  return kan ? ev.cat : null;
 }
 
 // Ska boten ta det öppna kortet? Ta det om det minst behåller handens kategori.
