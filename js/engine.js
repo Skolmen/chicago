@@ -1,7 +1,7 @@
 // Spelmotor för svenskt Chicago. Ramverksfri och serialiserbar så att samma
 // moduler senare kan köras på en server för onlinespel.
 
-import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js?v=22';
+import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js?v=23';
 
 // Halvering (poängdiskussion): vad frågan gäller per kategori.
 const HALV_LABEL = { 1: 'ditt par', 2: 'ditt bästa par', 3: 'din triss', 4: 'högsta kortet i din stege', 5: 'högsta kortet i din färg', 6: 'trissen i din kåk', 7: 'ditt fyrtal', 8: 'högsta kortet i din färgstege' };
@@ -31,6 +31,7 @@ export class Game {
     this.winner = null;
     this.log = [];
     this.awaiting = null; // { player, action, ... } som väntar på input
+    this.trickCards = []; // initierad direkt så att toJSON runtresan blir stabil
     this.discard = [];    // slängda kort (dolt öppet kort hamnar här)
     this.openOffer = null; // { player, idx, card } när ett öppet kort erbjuds
     this.budWhen = null; this.budNextPhase = null; this.budAnnounced = null; this.budCat = 0; this.budName = null;
@@ -329,7 +330,14 @@ export class Game {
   }
 
   playCard(i, cardIdx) {
+    if (this.phase !== 'tricks' || !this.awaiting || this.awaiting.action !== 'play' || this.awaiting.player !== i) return;
     const p = this.players[i];
+    if (!Number.isInteger(cardIdx) || cardIdx < 0 || cardIdx >= p.hand.length) return;
+    const mustSuit = this.awaiting.mustSuit;
+    if (mustSuit != null && p.hand.some(c => c.s === mustSuit) && p.hand[cardIdx].s !== mustSuit) {
+      this.say(`${p.name} måste följa färgen.`);
+      return;
+    }
     const card = p.hand.splice(cardIdx, 1)[0];
     this.trickCards.push({ player: i, card });
     this.emit({ type: 'play', player: i, card });
@@ -387,6 +395,7 @@ export class Game {
         this.tricksWon[winIdx]++;
         const winCard = this.trickCards.find(t => t.player === winIdx).card;
         this.say(`${this.players[winIdx].name} tar stick ${this.trickNo + 1} med ${cardLabel(winCard)}.`);
+        this.discard.push(...this.trickCards.map(t => t.card));
         this.trickCards = [];
         this.trickNo++;
         if (this.bid != null && winIdx !== this.bid) { this.endGiv('broken'); return; }

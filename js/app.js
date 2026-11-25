@@ -1,8 +1,8 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
-import { Game, RULES } from './engine.js?v=22';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js?v=22';
-import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js?v=22';
+import { Game, RULES } from './engine.js?v=24';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js?v=24';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js?v=24';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -264,7 +264,7 @@ function maybeBot() {
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
     else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat, cur.bestEv) != null ? game.announceBud(i) : game.budPass(i);
     else if (cur.action === 'halvAsk') (game.halv.n === 0 || (game.halv.comp > 0 && game.halv.n === 1)) ? game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp)) : game.halvDone(i);
-    else if (cur.action === 'halvAnswer') game.halvAnswer(i, botHalvAnswer(game.players[i].hand, cur.n));
+    else if (cur.action === 'halvAnswer') game.halvAnswer(i, botHalvAnswer(game.players[i].hand, cur.n, game.halv ? game.halv.comp : 0));
     else if (cur.action === 'fyrtalVal') game.fyrtalTake(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
     else if (cur.action === 'play') {
