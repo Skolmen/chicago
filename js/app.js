@@ -12,7 +12,7 @@ let selected = new Set();
 let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea']) {
+for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips']) {
   el[id] = document.getElementById(id);
 }
 
@@ -59,6 +59,17 @@ function render() {
   el.phaseLabel.textContent = (phaseNames[game.phase] || '') + (game.bid !== null && game.bid !== undefined ? ` – ${p[game.bid].name} har budat Chicago` : '');
   el.talongInfo && (el.talongInfo.textContent = `Talong: ${game.talong.length} kort`);
 
+  // Spelarchips: namn och poäng runt spelplanen, aktiv spelare lyfts
+  if (el.playerChips) {
+    el.playerChips.innerHTML = '';
+    p.forEach((pl, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip' + (a && a.player === i && a.action !== 'nextGiv' ? ' active' : '');
+      chip.textContent = `${pl.name} · ${pl.points} p` + (pl.kopstopp ? ' 🔒' : '');
+      el.playerChips.appendChild(chip);
+    });
+  }
+
   // Botens hand
   el.botCards.innerHTML = '';
   const botCount = p[BOT].hand.length;
@@ -87,7 +98,7 @@ function render() {
       }
       for (const tc of vis) {
         const wrap = document.createElement('div');
-        wrap.className = 'trickSlot' + (tcs.length ? '' : ' old');
+        wrap.className = 'trickSlot' + (tcs.length ? '' : ' old') + (a && a.player === tc.player ? ' turn' : '');
         wrap.appendChild(cardEl(tc.card));
         const lbl = document.createElement('div');
         lbl.className = 'trickName';
