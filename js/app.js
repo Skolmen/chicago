@@ -1,8 +1,8 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
 import { Game, RULES } from './engine.js';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud } from './bot.js';
-import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands } from './poker.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -192,6 +192,15 @@ function render() {
       el.tableMsg.textContent = (a.bestName ? `Redan sagt: ${a.bestName} (${p[game.budAnnounced]?.name ?? ''}${game.budNote ? ', övertog budet' : ''}). ` : 'Ingen har sagt något ännu. ') + (kanBjuda ? 'Du måste säga.' : 'Du kan vara tyst.');
       if (kanBjuda) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
       else el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
+    } else if (a.action === 'halvAsk') {
+      el.tableMsg.textContent = `Halvering: du delar ${CAT_NAMES[game.halv.cat]} med ${p[a.target].name}. Ställ frågor, svaren ska vara sanningsenliga.`;
+      for (const n of [2,3,4,5,6,7,8,9,10,11,12,13,14]) el.actions.appendChild(button(`Ö/U ${rankLabel(n)}`, '', () => game.halvAsk(HUMAN, n)));
+      el.actions.appendChild(button('Nöjd, jämför nu', 'primary', () => game.halvDone(HUMAN)));
+    } else if (a.action === 'halvAnswer') {
+      el.tableMsg.textContent = `Halvering: ${p[a.asker].name} frågar: har ${a.label} över eller under ${rankLabel(a.n)}? Svara sanningsenligt.`;
+      el.actions.appendChild(button('Över', '', () => game.halvAnswer(HUMAN, 'över')));
+      el.actions.appendChild(button('Under', '', () => game.halvAnswer(HUMAN, 'under')));
+      el.actions.appendChild(button('Exakt', '', () => game.halvAnswer(HUMAN, 'exakt')));
     } else if (a.action === 'chicago') {
       el.tableMsg.textContent = 'Du kan buda Chicago: lova att ta alla fem stick.';
       el.actions.appendChild(button('Buda Chicago', 'primary danger', () => game.bidChicago(HUMAN)));
@@ -254,6 +263,8 @@ function maybeBot() {
     if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
     else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat, cur.bestEv) != null ? game.announceBud(i) : game.budPass(i);
+    else if (cur.action === 'halvAsk') game.halv.n === 0 ? game.halvAsk(i, botHalvAsk(game.players[i].hand)) : game.halvDone(i);
+    else if (cur.action === 'halvAnswer') game.halvAnswer(i, botHalvAnswer(game.players[i].hand, cur.n));
     else if (cur.action === 'fyrtalVal') game.fyrtalTake(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
     else if (cur.action === 'play') {

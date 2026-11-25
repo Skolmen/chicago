@@ -1,7 +1,7 @@
 // Headless-tester: handutvärdering + hela simulerade partier med två botar.
 import { newDeck, shuffle, evaluate5, compareHands, handPoints } from './js/poker.js';
 import { Game, RULES } from './js/engine.js';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud } from './js/bot.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './js/bot.js';
 
 let failures = 0;
 function check(name, cond) {
@@ -29,6 +29,8 @@ function botMoveFor(i, game) {
   if (a.action === 'exchange') return game.exchange(i, botExchange(game.players[i].hand));
   if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
   if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat, a.bestEv); return c != null ? game.announceBud(i) : game.budPass(i); }
+  if (a.action === 'halvAsk') return game.halv.n === 0 ? game.halvAsk(i, botHalvAsk(game.players[i].hand)) : game.halvDone(i);
+  if (a.action === 'halvAnswer') return game.halvAnswer(i, botHalvAnswer(game.players[i].hand, a.n));
   if (a.action === 'fyrtalVal') return game.fyrtalTake(i);
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
   if (a.action === 'play') {
@@ -172,9 +174,11 @@ function mulberry32(a) {
   g.players[1].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)]; // par 9:or
   g.beginBud('efter första bytet', 'kop2');
   g.announceBud(0); // par
-  g.announceBud(1); // högre par övertar
+  g.announceBud(1); // högre par: halvering öppnas, sen övertar
+  check('halvering öppnas vid samma kategori', !!g.halv && g.awaiting.action === 'halvAsk');
+  g.halvAsk(1, 7); g.halvAnswer(0, 'under'); g.halvDone(1);
   check('poängen går till det högre paret', g.players[1].points === 1 && g.players[0].points === 0);
-  check('övertaget syns i loggen', g.log.some(l => l.includes('Datorn säger Par (högre än Du).')));
+  check('övertaget syns i loggen', g.log.some(l => l.includes('Datorn övertar budet (högre än Du).')));
 }
 {
   const g = new Game(['Du', 'Datorn']);
@@ -242,6 +246,8 @@ function mulberry32(a) {
       if (a.action === 'exchange') { g.exchange(a.player, botExchange(g.players[a.player].hand)); continue; }
       if (a.action === 'openOffer') { g.resolveOpen(a.player, botOpenChoice(g.players[a.player].hand, a.card, a.idx)); continue; }
       if (a.action === 'bud') { const c = botBud(g.players[a.player].hand, a.bestCat, a.bestEv); c != null ? g.announceBud(a.player) : g.budPass(a.player); continue; }
+      if (a.action === 'halvAsk') { g.halv.n === 0 ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand)) : g.halvDone(a.player); continue; }
+      if (a.action === 'halvAnswer') { g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n)); continue; }
       if (a.action === 'fyrtalVal') { g.fyrtalTake(a.player); continue; }
       throw new Error('oväntad action ' + a.action);
     }
@@ -265,6 +271,7 @@ function mulberry32(a) {
   // Regler 25 nov: man kan välja att byta ett kort stängt direkt (utan öppet-kort-visning)
   const g = new Game(['Du', 'Datorn'], mulberry32(3));
   g.giv = 1; g.phase = 'kop1';
+  g.exchanged = new Set(); g.discard = [];
   g.players[0].hand = [C(2, S), C(9, H), C(10, D), C(11, K), C(13, S)];
   g.talong = [C(4, S), C(6, D), C(8, K)];
   g.awaiting = { player: 0, action: 'exchange' };
@@ -273,6 +280,38 @@ function mulberry32(a) {
   check('stängt byte direkt fyller handen', g.players[0].hand.length === 5);
   check('stängt byte direkt drar översta kortet', g.players[0].hand.some(c => c.r === 8 && c.s === K));
   check('loggen avslöjar inte kortet', !g.log.some(l => l.includes('Öppet kort')));
+}
+
+
+{
+  // Halvering (issue 75): samma kategori öppnar frågefas innan jämförelsen
+  const g = new Game(['Du', 'Datorn'], mulberry32(9));
+  g.dealer = 1;
+  g.exchanged = new Set(); g.discard = [];
+  g.beginBud('test', 'kop2');
+  g.players[0].hand = [C(3, S), C(3, H), C(10, D), C(11, K), C(12, S)]; // par i treor
+  g.players[1].hand = [C(9, S), C(9, H), C(10, D), C(11, K), C(12, S)]; // par i nior
+  check('första annonsen går direkt', (g.announceBud(0), g.budAnnounced === 0 && g.awaiting.player === 1 && g.awaiting.action === 'bud'));
+  g.announceBud(1);
+  check('samma kategori öppnar halvering', !!g.halv && g.awaiting.action === 'halvAsk' && g.awaiting.player === 1 && g.halv.target === 0);
+  g.halvAsk(1, 7);
+  check('frågan loggas', g.log.some(l => l.includes('över eller under 7')));
+  check('budhållaren ska svara', g.awaiting.action === 'halvAnswer' && g.awaiting.player === 0 && g.awaiting.n === 7);
+  g.halvAnswer(0, 'under');
+  check('svaret loggas', g.log.some(l => l.includes('svarar: under')));
+  check('tillbaka hos delaren', g.awaiting.action === 'halvAsk' && g.awaiting.player === 1);
+  g.halvDone(1);
+  check('högre par övertar budet', g.budAnnounced === 1 && g.budNote === 'övertog budet' && g.budCat === 1);
+  check('halvering klarar spara/ladda', (() => {
+    const g3 = new Game(['Du', 'Datorn'], mulberry32(9));
+    g3.dealer = 1; g3.beginBud('test', 'kop2');
+    g3.players[0].hand = [C(3, S), C(3, H), C(10, D), C(11, K), C(12, S)];
+    g3.players[1].hand = [C(9, S), C(9, H), C(10, D), C(11, K), C(12, S)];
+    g3.exchanged = new Set(); g3.chicagoAsked = new Set(); g3.discard = [];
+    g3.announceBud(0); g3.announceBud(1); g3.halvAsk(1, 7);
+    const g4 = Game.fromJSON(JSON.parse(JSON.stringify(g3.toJSON())));
+    return !!g4.halv && g4.halv.target === 0 && g4.awaiting.action === 'halvAnswer';
+  })());
 }
 
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);

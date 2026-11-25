@@ -1,7 +1,10 @@
 // Spelmotor för svenskt Chicago. Ramverksfri och serialiserbar så att samma
 // moduler senare kan köras på en server för onlinespel.
 
-import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel } from './poker.js';
+import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js';
+
+// Halvering (poängdiskussion): vad frågan gäller per kategori.
+const HALV_LABEL = { 1: 'ditt par', 2: 'ditt bästa par', 3: 'din triss', 4: 'högsta kortet i din stege', 5: 'högsta kortet i din färg', 6: 'trissen i din kåk', 7: 'ditt fyrtal', 8: 'högsta kortet i din färgstege' };
 
 export const RULES = {
   target: 52,        // poäng som krävs för vinst
@@ -75,6 +78,7 @@ export class Game {
     this.budCat = 0;
     this.budName = null;
     this.budNote = null;
+    this.halv = null;
     this.budAsked = new Set();
     this.budOrder = [];
     for (let k = 0; k < this.players.length; k++) this.budOrder.push((this.dealer + 1 + k) % this.players.length);
@@ -95,15 +99,56 @@ export class Game {
     const ev = evaluate5(this.players[i].hand);
     if (this.canBid(ev)) {
       const sameCat = this.budCat === ev.cat && this.budAnnounced !== null;
-      const prev = sameCat ? this.players[this.budAnnounced].name : null;
+      if (sameCat) {
+        // Poängdiskussion (issue 75): den som delar ställer halveringsfrågor
+        // till budhållaren innan händerna jämförs.
+        const prevIdx = this.budAnnounced;
+        this.halv = { asker: i, target: prevIdx, cat: ev.cat, n: 0, name: handName(ev), ev: { cat: ev.cat, tie: ev.tie.slice() } };
+        this.say(`${this.players[i].name} säger ${handName(ev)} och delar med ${this.players[prevIdx].name}. Halvering: ${this.players[i].name} får fråga.`);
+        this.awaiting = { player: i, action: 'halvAsk', target: prevIdx, cat: ev.cat };
+        this.emit({ type: 'await', awaiting: this.awaiting });
+        return;
+      }
       this.budAnnounced = i;
       this.budCat = ev.cat;
       this.budName = handName(ev);
       this.budEv = { cat: ev.cat, tie: ev.tie.slice() };
-      this.budNote = prev ? 'övertog budet' : null;
-      this.say(prev ? `${this.players[i].name} säger ${this.budName} (högre än ${prev}).` : `${this.players[i].name} säger ${this.budName}.`);
+      this.budNote = null;
+      this.say(`${this.players[i].name} säger ${this.budName}.`);
     } else {
       this.say(`${this.players[i].name} är tyst.`);
+    }
+    this.awaiting = null;
+    if (this.budAsked.size < this.budOrder.length) return this.step();
+    return this.resolveBud();
+  }
+
+  // Halvering: delaren frågar budhållaren över eller under en valör.
+  halvAsk(i, n) {
+    if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAsk' || this.awaiting.player !== i) return;
+    this.halv.n++;
+    this.say(`${this.players[i].name} frågar ${this.players[this.halv.target].name}: har ${HALV_LABEL[this.halv.cat]} över eller under ${rankLabel(n)}?`);
+    this.awaiting = { player: this.halv.target, action: 'halvAnswer', n, label: HALV_LABEL[this.halv.cat], asker: this.halv.asker };
+  }
+
+  halvAnswer(i, ans) {
+    if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAnswer' || this.awaiting.player !== i) return;
+    this.say(`${this.players[i].name} svarar: ${ans}.`);
+    this.awaiting = { player: this.halv.asker, action: 'halvAsk', target: this.halv.target, cat: this.halv.cat };
+  }
+
+  halvDone(i) {
+    if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAsk' || this.awaiting.player !== i) return;
+    const h = this.halv; this.halv = null;
+    if (compareHands(h.ev, this.budEv) > 0) {
+      this.budAnnounced = h.asker;
+      this.budCat = h.cat;
+      this.budName = h.name;
+      this.budEv = h.ev;
+      this.budNote = 'övertog budet';
+      this.say(`${this.players[h.asker].name} övertar budet (högre än ${this.players[h.target].name}).`);
+    } else {
+      this.say(`${this.players[this.budAnnounced].name} behåller budet.`);
     }
     this.awaiting = null;
     if (this.budAsked.size < this.budOrder.length) return this.step();
@@ -420,7 +465,7 @@ export class Game {
       discard: this.discard, openOffer: this.openOffer,
       budWhen: this.budWhen, budNextPhase: this.budNextPhase, budAnnounced: this.budAnnounced,
       budCat: this.budCat, budName: this.budName, budAsked: [...this.budAsked], budOrder: this.budOrder,
-      budEv: this.budEv, budNote: this.budNote, fyrtalZeroUsed: this.fyrtalZeroUsed, fyrtalPending: this.fyrtalPending, fyrtalResume: this.fyrtalResume,
+      budEv: this.budEv, budNote: this.budNote, fyrtalZeroUsed: this.fyrtalZeroUsed, fyrtalPending: this.fyrtalPending, fyrtalResume: this.fyrtalResume, halv: this.halv,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
       log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
@@ -436,7 +481,7 @@ export class Game {
     g.winner = d.winner === null ? null : g.players[d.winner];
     g.budWhen = d.budWhen || null; g.budNextPhase = d.budNextPhase || null; g.budAnnounced = (d.budAnnounced === null || d.budAnnounced === undefined) ? null : d.budAnnounced;
     g.budCat = d.budCat || 0; g.budName = d.budName || null; g.budAsked = new Set(d.budAsked || []); g.budOrder = d.budOrder || [];
-    g.budEv = d.budEv || null; g.budNote = d.budNote || null; g.fyrtalZeroUsed = !!d.fyrtalZeroUsed; g.fyrtalPending = d.fyrtalPending || null; g.fyrtalResume = d.fyrtalResume || null;
+    g.budEv = d.budEv || null; g.budNote = d.budNote || null; g.fyrtalZeroUsed = !!d.fyrtalZeroUsed; g.fyrtalPending = d.fyrtalPending || null; g.fyrtalResume = d.fyrtalResume || null; g.halv = d.halv || null;
     g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
     g.discard = d.discard || []; g.openOffer = d.openOffer || null;
     return g;
