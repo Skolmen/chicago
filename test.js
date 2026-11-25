@@ -13,8 +13,9 @@ const S = 0, H = 1, D = 2, K = 3; // spader, hjärter, ruter, klöver
 
 // Handutvärdering
 check('royal SF', handPoints(evaluate5([C(14, S), C(13, S), C(12, S), C(11, S), C(10, S)])) === 52);
-check('färgstege', handPoints(evaluate5([C(9, H), C(8, H), C(7, H), C(6, H), C(5, H)])) === 8);
+check('färgstege 52', handPoints(evaluate5([C(9, H), C(8, H), C(7, H), C(6, H), C(5, H)])) === 52);
 check('fyrtal slår kåk', compareHands(evaluate5([C(4, S), C(4, H), C(4, D), C(4, K), C(2, S)]), evaluate5([C(3, S), C(3, H), C(3, D), C(8, K), C(8, S)])) > 0);
+check('fyrtal 8 p', handPoints(evaluate5([C(4, S), C(4, H), C(4, D), C(4, K), C(2, S)])) === 8);
 check('stege wheel', evaluate5([C(14, S), C(2, H), C(3, D), C(4, K), C(5, S)]).cat === 4);
 check('stege wheel slår inte 6-hög', compareHands(evaluate5([C(14, S), C(2, H), C(3, D), C(4, K), C(5, S)]), evaluate5([C(6, S), C(7, H), C(8, D), C(9, K), C(10, S)])) < 0);
 check('par', evaluate5([C(14, S), C(14, H), C(3, D), C(7, K), C(9, S)]).cat === 1);
@@ -27,7 +28,8 @@ function botMoveFor(i, game) {
   const a = game.awaiting;
   if (a.action === 'exchange') return game.exchange(i, botExchange(game.players[i].hand));
   if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
-  if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat); return c != null ? game.announceBud(i) : game.budPass(i); }
+  if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat, a.bestEv); return c != null ? game.announceBud(i) : game.budPass(i); }
+  if (a.action === 'fyrtalVal') return game.fyrtalTake(i);
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
   if (a.action === 'play') {
     return game.playCard(i, botPlay({
@@ -119,17 +121,17 @@ function mulberry32(a) {
   check('inget bud efter sista bytet, direkt till utspelet', g.phase === 'tricks' || g.phase === 'chicago');
 }
 {
-  // Tyst är alltid tillåtet och ger inget; alla tysta = ingen poäng
+  // Utan par eller bättre får man vara tyst; alla tysta = ingen poäng
   const g = new Game(['Du', 'Datorn']);
   g.onEvent = () => {};
   g.giv = 1; g.phase = 'kop2'; g.dealer = 0; // Du ger, Datorn säger först
   g.exchanged = new Set([0, 1]);
-  g.players[0].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)]; // par
-  g.players[1].hand = [C(2, S), C(4, H), C(6, D), C(7, K), C(11, S)]; // högkort
+  g.players[0].hand = [C(2, S), C(4, H), C(6, D), C(7, K), C(11, S)]; // högkort
+  g.players[1].hand = [C(3, S), C(5, H), C(9, D), C(8, K), C(12, S)]; // högkort
   g.beginBud('efter andra bytet', 'kop3');
   g.budPass(1);
-  g.budPass(0); // Du har par men väljer tyst
-  check('tyst med par ger ingen poäng', g.players[0].points === 0 && g.players[1].points === 0);
+  g.budPass(0);
+  check('alla tysta ger ingen poäng', g.players[0].points === 0 && g.players[1].points === 0);
   check('ingen bjuder, giv:en fortsätter', g.phase !== 'bud' && g.phase !== 'kop3');
 }
 {
@@ -160,6 +162,56 @@ function mulberry32(a) {
   g2.announceBud(1);
   check('bud klart efter laddning', g2.players[1].points === 3 && g2.budWhen === 'efter andra bytet');
 }
+// Tjuvpassförbud och högre par vid samma kategori (issue 49)
+{
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1;
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(5, S), C(5, H), C(3, D), C(7, K), C(11, S)]; // par 5:or
+  g.players[1].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)]; // par 9:or
+  g.beginBud('efter första bytet', 'kop2');
+  g.announceBud(0); // par
+  g.announceBud(1); // högre par övertar
+  check('poängen går till det högre paret', g.players[1].points === 1 && g.players[0].points === 0);
+  check('övertaget syns i loggen', g.log.some(l => l.includes('Datorn säger Par (högre än Du).')));
+}
+{
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1;
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(5, S), C(5, H), C(3, D), C(7, K), C(11, S)]; // par
+  g.players[1].hand = [C(2, S), C(4, H), C(6, D), C(8, K), C(12, S)]; // högt utan par
+  g.beginBud('efter första bytet', 'kop2');
+  const logLen = g.log.length;
+  g.budPass(0); // har par: tjuvpassning vägras
+  check('tjuvpass vägras', g.awaiting && g.awaiting.action === 'bud' && g.awaiting.player === 0 && g.log.length === logLen + 1);
+  g.announceBud(0); // tvingas säga par
+  g.budPass(1);
+  check('par måste sägas', g.players[0].points === 1);
+  check('giv:en fortsätter efter budet', g.phase === 'bud' && g.budWhen === 'efter andra bytet');
+}
+{
+  // Fyrtal: 8 p eller nollställ alla, en gång per parti
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1;
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(5, S), C(5, H), C(5, D), C(5, K), C(11, S)]; // fyrtal
+  g.players[1].hand = [C(2, S), C(4, H), C(6, D), C(8, K), C(12, S)];
+  g.players[0].points = 10; g.players[1].points = 7;
+  g.beginBud('efter första bytet', 'kop2');
+  g.announceBud(0); // fyrtal
+  g.announceBud(1); // tyst
+  check('fyrtal väntar på val', g.phase === 'fyrtalVal' && g.awaiting && g.awaiting.action === 'fyrtalVal' && g.awaiting.player === 0);
+  g.fyrtalZero(0);
+  check('nollställning sätter alla på noll', g.players[0].points === 0 && g.players[1].points === 0 && g.fyrtalZeroUsed === true);
+  check('spel fortsätter efter nollställning', g.phase === 'bud' && g.budWhen === 'efter andra bytet');
+  g.announceBud(0); // fyrtal igen: bara poäng nu
+  g.announceBud(1);
+  check('andra fyrtal ger 8 p direkt', g.players[0].points === 8 && g.phase === 'kop3');
+}
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);
 
@@ -183,7 +235,8 @@ process.exit(failures === 0 ? 0 : 1);
     const a = g2.awaiting;
     if (!a) break;
     if (a.action === 'exchange') g2.exchange(a.player, a.player === 0 ? [] : [0]);
-    else if (a.action === 'bud') botBud(g2.players[a.player].hand, a.bestCat) != null ? g2.announceBud(a.player) : g2.budPass(a.player);
+    else if (a.action === 'bud') botBud(g2.players[a.player].hand, a.bestCat, a.bestEv) != null ? g2.announceBud(a.player) : g2.budPass(a.player);
+    else if (a.action === 'fyrtalVal') g2.fyrtalTake(a.player);
     else if (a.action === 'chicago') a.player === 0 ? g2.passChicago() : g2.bidChicago(1);
     else if (a.action === 'nextGiv') g2.nextGiv();
     else {
