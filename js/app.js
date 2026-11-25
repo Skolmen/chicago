@@ -12,7 +12,7 @@ let selected = new Set();
 let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips']) {
+for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logToggle', 'logCount']) {
   el[id] = document.getElementById(id);
 }
 
@@ -75,13 +75,18 @@ function render() {
   const botCount = p[BOT].hand.length;
   for (let i = 0; i < botCount; i++) el.botCards.appendChild(backEl());
 
-  // Loggen (senaste raderna)
-  el.log.innerHTML = '';
-  for (const line of game.log.slice(-4)) {
-    const d = document.createElement('div');
-    d.textContent = line;
-    el.log.appendChild(d);
+  // Loggen: hopfällbar panel, räknare på knappen, prick vid nyheter
+  if (logOpen) {
+    el.log.innerHTML = '';
+    for (const line of game.log) {
+      const d = document.createElement('div');
+      d.textContent = line;
+      el.log.appendChild(d);
+    }
+    el.log.scrollTop = el.log.scrollHeight;
   }
+  el.logCount.textContent = game.log.length;
+  el.logToggle.classList.toggle('new', !logOpen && game.log.length > lastSeenLog);
 
   // Spelade kort i sticket (pågående, annars förra sticket svagt)
   if (el.trickArea) {
@@ -315,12 +320,19 @@ function showMenu(title) {
 
 // --- Vakt: om en händelse skulle gå förlorad körs datorns tur ändå ---
 let botPending = false;
+let logOpen = false;
+let lastSeenLog = 0;
 setInterval(() => { if (game && !game.over) maybeBot(); }, 1200);
 
 function boot() {
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   el.menuBtn = document.getElementById('menuBtn');
   if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
+  if (el.logToggle) el.logToggle.addEventListener('click', () => {
+    logOpen = !logOpen;
+    el.log.classList.toggle('hidden', !logOpen);
+    if (logOpen) { lastSeenLog = game ? game.log.length : 0; el.logToggle.classList.remove('new'); render(); }
+  });
   const saved = restoreGame();
   if (saved && !saved.over) {
     game = saved; game.onEvent = handleEvent;
