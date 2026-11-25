@@ -29,7 +29,7 @@ function botMoveFor(i, game) {
   if (a.action === 'exchange') return game.exchange(i, botExchange(game.players[i].hand));
   if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
   if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat, a.bestEv); return c != null ? game.announceBud(i) : game.budPass(i); }
-  if (a.action === 'halvAsk') return game.halv.n === 0 ? game.halvAsk(i, botHalvAsk(game.players[i].hand)) : game.halvDone(i);
+  if (a.action === 'halvAsk') return (game.halv.n === 0 || (game.halv.comp > 0 && game.halv.n === 1)) ? game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp)) : game.halvDone(i);
   if (a.action === 'halvAnswer') return game.halvAnswer(i, botHalvAnswer(game.players[i].hand, a.n));
   if (a.action === 'fyrtalVal') return game.fyrtalTake(i);
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
@@ -246,7 +246,7 @@ function mulberry32(a) {
       if (a.action === 'exchange') { g.exchange(a.player, botExchange(g.players[a.player].hand)); continue; }
       if (a.action === 'openOffer') { g.resolveOpen(a.player, botOpenChoice(g.players[a.player].hand, a.card, a.idx)); continue; }
       if (a.action === 'bud') { const c = botBud(g.players[a.player].hand, a.bestCat, a.bestEv); c != null ? g.announceBud(a.player) : g.budPass(a.player); continue; }
-      if (a.action === 'halvAsk') { g.halv.n === 0 ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand)) : g.halvDone(a.player); continue; }
+      if (a.action === 'halvAsk') { (g.halv.n === 0 || (g.halv.comp > 0 && g.halv.n === 1)) ? g.halvAsk(a.player, botHalvAsk(g.players[a.player].hand, g.halv.comp)) : g.halvDone(a.player); continue; }
       if (a.action === 'halvAnswer') { g.halvAnswer(a.player, botHalvAnswer(g.players[a.player].hand, a.n)); continue; }
       if (a.action === 'fyrtalVal') { g.fyrtalTake(a.player); continue; }
       throw new Error('oväntad action ' + a.action);
@@ -312,6 +312,27 @@ function mulberry32(a) {
     const g4 = Game.fromJSON(JSON.parse(JSON.stringify(g3.toJSON())));
     return !!g4.halv && g4.halv.target === 0 && g4.awaiting.action === 'halvAnswer';
   })());
+}
+
+
+{
+  // Knektregeln (issue 78): samma par -> frågorna går vidare till högsta kortet efteråt
+  const g = new Game(['Du', 'Datorn'], mulberry32(11));
+  g.dealer = 1; g.exchanged = new Set(); g.discard = [];
+  g.beginBud('test', 'kop2');
+  g.players[0].hand = [C(11, S), C(11, H), C(3, D), C(7, K), C(5, S)]; // par knektar, högsta efteråt 7
+  g.players[1].hand = [C(11, S), C(11, H), C(3, D), C(8, K), C(5, S)]; // par knektar, högsta efteråt 8
+  g.announceBud(0);
+  check('första knecktparet tar budet', g.budAnnounced === 0);
+  g.announceBud(1);
+  check('halvering öppnas vid samma par', !!g.halv && g.halv.comp === 0);
+  g.halvAsk(1, 11);
+  g.halvAnswer(0, 'exakt');
+  check('samma valör går vidare till högsta kortet', g.halv.comp === 1 && g.log.some(l => l.includes('högsta kortet efteråt')));
+  g.halvAsk(1, 8);
+  g.halvAnswer(0, 'under');
+  g.halvDone(1);
+  check('högsta kortet efteråt avgör', g.budAnnounced === 1 && g.budNote === 'övertog budet');
 }
 
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);

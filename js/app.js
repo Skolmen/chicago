@@ -1,8 +1,8 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
-import { Game, RULES } from './engine.js';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js';
-import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js';
+import { Game, RULES } from './engine.js?v=22';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js?v=22';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js?v=22';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -193,7 +193,7 @@ function render() {
       if (kanBjuda) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
       else el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
     } else if (a.action === 'halvAsk') {
-      el.tableMsg.textContent = `Halvering: du delar ${CAT_NAMES[game.halv.cat]} med ${p[a.target].name}. Ställ frågor, svaren ska vara sanningsenliga.`;
+      el.tableMsg.textContent = `Halvering: du delar ${CAT_NAMES[game.halv.cat]} med ${p[a.target].name}. Frågan gäller: ${a.label}.`;
       for (const n of [2,3,4,5,6,7,8,9,10,11,12,13,14]) el.actions.appendChild(button(`Ö/U ${rankLabel(n)}`, '', () => game.halvAsk(HUMAN, n)));
       el.actions.appendChild(button('Nöjd, jämför nu', 'primary', () => game.halvDone(HUMAN)));
     } else if (a.action === 'halvAnswer') {
@@ -263,7 +263,7 @@ function maybeBot() {
     if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
     else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat, cur.bestEv) != null ? game.announceBud(i) : game.budPass(i);
-    else if (cur.action === 'halvAsk') game.halv.n === 0 ? game.halvAsk(i, botHalvAsk(game.players[i].hand)) : game.halvDone(i);
+    else if (cur.action === 'halvAsk') (game.halv.n === 0 || (game.halv.comp > 0 && game.halv.n === 1)) ? game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp)) : game.halvDone(i);
     else if (cur.action === 'halvAnswer') game.halvAnswer(i, botHalvAnswer(game.players[i].hand, cur.n));
     else if (cur.action === 'fyrtalVal') game.fyrtalTake(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
