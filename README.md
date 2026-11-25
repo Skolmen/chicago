@@ -14,7 +14,7 @@ Kortspelet Chicago (svenska regler) i webbläsaren, mobilanpassat. Spela mot dat
 
 ### Dokumenterade tolkningar
 - Sluthand poängsätts på handen efter tredje köpet (kort som spelats till sticken är borta ur handen).
-- Vid lyckat Chicago-bud får budgivaren utöver +15 även sista sticket (+5) och sluthandspoäng.
+- Vid lyckat Chicago-bud får budgivaren endast +15 poäng; sista sticket och sluthandspoäng utgår den given.
 - Första sticket spelas ut av spelaren efter givaren; därefter leder stickvinnaren.
 - Oavgjort i toppen vid partislut: partiet fortsätter.
 
