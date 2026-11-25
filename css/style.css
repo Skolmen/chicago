@@ -17,9 +17,10 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .botRow .botCards .card { width:calc(var(--card-w)*.62); height:calc(var(--card-h)*.62); }
 .scoreline.win strong { color:#8a6d00; }
 #logWrap { width:100%; display:flex; flex-direction:column; align-items:center; margin-top:6px; }
-#menuBtn { position:relative; }
-#menuDot { position:absolute; top:2px; right:2px; width:8px; height:8px; border-radius:50%; background:#e0b23c; }
-#menuDot.hidden { display:none; }
+.hdrBtns { display:flex; gap:8px; align-items:baseline; }
+#logBtn { position:relative; }
+#logDot { position:absolute; top:2px; right:2px; width:8px; height:8px; border-radius:50%; background:#e0b23c; }
+#logDot.hidden { display:none; }
 #openCard { display:flex; flex-direction:column; align-items:center; gap:4px; }
 #openCard:empty { display:none; }
 #openCard .card { margin:10px 0; }
@@ -60,7 +61,7 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .scoretable th, .scoretable td { border-bottom:1px solid #e5e0d0; padding:6px; }
 .scoretable th { text-align:left; opacity:.8; font-weight:600; }
 .scoretable td:first-child, .scoretable th:first-child { text-align:left; }
-.scoretable td:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
+.scoretable td:not(:first-child), .scoretable th:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
 .scoretable tr.total td { font-weight:700; border-top:2px solid #444; border-bottom:none; }
 #playerChips { display:flex; justify-content:center; gap:8px; margin:6px 0; flex-wrap:wrap; }
 #playerChips .chip { padding:6px 14px; font-size:.9rem; border:1px solid rgba(255,255,255,.3); border-radius:999px; background:rgba(255,255,255,.14); color:#fff; opacity:.75; }
