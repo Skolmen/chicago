@@ -37,7 +37,9 @@ h1 { font-size:1.3rem; letter-spacing:.06em; }
 .scoreline { display:flex; justify-content:space-between; padding:6px 4px; border-bottom:1px solid #eee; font-size:1rem; }
 .mini { font-size:.8rem; opacity:.75; margin-top:10px; display:flex; flex-direction:column; gap:2px; }
 
-#overlayContent .btn { display:block; width:100%; margin-top:8px; }
+#overlayContent .btn { display:block; width:100%; margin-top:8px; background:#eae6da; border-color:#d8d2c0; color:#222; }
+#overlayContent .btn.primary { background:#e0b23c; border-color:#e0b23c; color:#1d1500; }
+#overlayContent .btn.danger { background:#b3392f; border-color:#b3392f; color:#fff; }
 .scoretable { width:100%; border-collapse:collapse; margin:8px 0; font-size:.95rem; }
 .scoretable th, .scoretable td { border-bottom:1px solid #e5e0d0; padding:6px; }
 .scoretable th { text-align:left; opacity:.8; font-weight:600; }

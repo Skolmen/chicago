@@ -1,5 +1,5 @@
 // Service worker: nätet först, cachen som reserv när nätet saknas.
-const CACHE = 'chicago-v7';
+const CACHE = 'chicago-v8';
 const ASSETS = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/bot.js', 'js/poker.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
