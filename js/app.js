@@ -175,6 +175,10 @@ function render() {
         game.exchange(HUMAN, [...selected]);
         selected = new Set();
       }));
+      if (selected.size === 1) el.actions.appendChild(button('Byt stängt (utan öppet kort)', '', () => {
+        game.exchange(HUMAN, [...selected], true);
+        selected = new Set();
+      }));
       if (selected.size) el.actions.appendChild(button('Rensa val', '', () => { selected = new Set(); render(); }));
       el.tableMsg.textContent = 'Välj kort att byta (eller byt inga).';
     } else if (a.action === 'openOffer') {

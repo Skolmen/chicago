@@ -16,8 +16,8 @@ check('royal SF', handPoints(evaluate5([C(14, S), C(13, S), C(12, S), C(11, S), 
 check('färgstege 52', handPoints(evaluate5([C(9, H), C(8, H), C(7, H), C(6, H), C(5, H)])) === 52);
 check('fyrtal slår kåk', compareHands(evaluate5([C(4, S), C(4, H), C(4, D), C(4, K), C(2, S)]), evaluate5([C(3, S), C(3, H), C(3, D), C(8, K), C(8, S)])) > 0);
 check('fyrtal 8 p', handPoints(evaluate5([C(4, S), C(4, H), C(4, D), C(4, K), C(2, S)])) === 8);
-check('stege wheel', evaluate5([C(14, S), C(2, H), C(3, D), C(4, K), C(5, S)]).cat === 4);
-check('stege wheel slår inte 6-hög', compareHands(evaluate5([C(14, S), C(2, H), C(3, D), C(4, K), C(5, S)]), evaluate5([C(6, S), C(7, H), C(8, D), C(9, K), C(10, S)])) < 0);
+check('ess är inte lägst i stege (2-6 är lägsta steget)', evaluate5([C(14, S), C(2, H), C(3, D), C(4, K), C(5, S)]).cat === 0);
+check('2-6 är en stege', evaluate5([C(2, S), C(3, H), C(4, D), C(5, K), C(6, S)]).cat === 4);
 check('par', evaluate5([C(14, S), C(14, H), C(3, D), C(7, K), C(9, S)]).cat === 1);
 check('hög hand 0 p', handPoints(evaluate5([C(14, S), C(12, H), C(9, D), C(7, K), C(3, S)])) === 0);
 check('färg slår stege', compareHands(evaluate5([C(14, S), C(12, S), C(9, S), C(7, S), C(3, S)]), evaluate5([C(14, S), C(12, H), C(11, D), C(10, K), C(9, S)])) > 0);
@@ -258,6 +258,21 @@ function mulberry32(a) {
   g2.step();
   check('chicago erbjuds först till spelaren efter givaren', g2.awaiting && g2.awaiting.player === 1);
   if (g2.awaiting && g2.awaiting.player === 1) { g2.passChicago(); check('efter tacka nej frågas spelare 0', g2.awaiting && g2.awaiting.player === 0); }
+}
+
+
+{
+  // Regler 25 nov: man kan välja att byta ett kort stängt direkt (utan öppet-kort-visning)
+  const g = new Game(['Du', 'Datorn'], mulberry32(3));
+  g.giv = 1; g.phase = 'kop1';
+  g.players[0].hand = [C(2, S), C(9, H), C(10, D), C(11, K), C(13, S)];
+  g.talong = [C(4, S), C(6, D), C(8, K)];
+  g.awaiting = { player: 0, action: 'exchange' };
+  g.exchange(0, [0], true); // stängt direkt: ingen öppen-visning
+  check('stängt byte direkt ger ingen openOffer', !(g.awaiting && g.awaiting.action === 'openOffer'));
+  check('stängt byte direkt fyller handen', g.players[0].hand.length === 5);
+  check('stängt byte direkt drar översta kortet', g.players[0].hand.some(c => c.r === 8 && c.s === K));
+  check('loggen avslöjar inte kortet', !g.log.some(l => l.includes('Öppet kort')));
 }
 
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);
