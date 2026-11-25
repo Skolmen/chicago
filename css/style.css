@@ -6,7 +6,7 @@ header { display:flex; justify-content:space-between; align-items:baseline; padd
 h1 { font-size:1.3rem; letter-spacing:.06em; }
 #givLabel { opacity:.85; font-size:.95rem; }
 #scorebar { display:flex; gap:8px; padding:4px 14px 8px; flex-wrap:wrap; }
-.chip { background:rgba(255,255,255,.12); border-radius:999px; padding:4px 10px; font-size:.85rem; }
+.chip { background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.35); border-radius:999px; padding:6px 14px; font-size:.85rem; color:#fff; }
 .chip.subtle { opacity:.7; }
 #table { flex:1; display:flex; flex-direction:column; align-items:center; padding:0 12px; gap:8px; }
 #phaseLabel { font-weight:600; font-size:1rem; min-height:1.4em; text-align:center; }
