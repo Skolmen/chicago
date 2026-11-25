@@ -335,12 +335,13 @@ export class Game {
 
   endGiv(kind, lastWinner = null) {
     if (kind === 'normal') {
+      if (this.bid !== null && this.bid === lastWinner) {
+        // Lyckat Chicago: endast Chicago-poängen, ingen annan poäng denna giv
+        this.players[this.bid].points += RULES.chicagoGain;
+        this.say(`${this.players[this.bid].name} lyckades med Chicago-budet: +${RULES.chicagoGain} p, given ger inga andra poäng.`);
+      } else {
       this.players[lastWinner].points += RULES.lastTrick;
       this.say(`${this.players[lastWinner].name} tar sista sticket: +${RULES.lastTrick} p.`);
-      if (this.bid !== null && this.bid === lastWinner) {
-        this.players[this.bid].points += RULES.chicagoGain;
-        this.say(`${this.players[this.bid].name} lyckades med Chicago-budet: +${RULES.chicagoGain} p!`);
-      }
       const evs = this.sluthand.map(h => evaluate5(h));
       let best = evs[0];
       for (const e of evs) if (compareHands(e, best) > 0) best = e;
@@ -362,6 +363,7 @@ export class Game {
         } else {
           this.say('Lika bästa sluthänder, ingen poäng.');
         }
+      }
       }
     } else {
       this.players[this.bid].points -= RULES.chicagoLoss;
