@@ -67,7 +67,7 @@ function render() {
     el.playerChips.innerHTML = '';
     p.forEach((pl, i) => {
       const chip = document.createElement('span');
-      chip.className = 'chip' + (a && a.player === i && a.action !== 'nextGiv' ? ' active' : '');
+      chip.className = 'chip' + (a && a.player === i && a.action !== 'nextGiv' ? ' active' : '') + (game.bid === i ? ' chicagoBid' : '');
       chip.textContent = `${pl.name} · ${pl.points} p` + (pl.kopstopp ? ' 🔒' : '');
       el.playerChips.appendChild(chip);
     });
