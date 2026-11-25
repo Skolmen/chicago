@@ -1,7 +1,8 @@
 // Spelmotor för svenskt Chicago. Ramverksfri och serialiserbar så att samma
 // moduler senare kan köras på en server för onlinespel.
 
-import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js?v=23';
+import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js?v=25';
+import { T } from './texts.js?v=25';
 
 // Halvering (poängdiskussion): vad frågan gäller per kategori.
 const HALV_LABEL = { 1: 'ditt par', 2: 'ditt bästa par', 3: 'din triss', 4: 'högsta kortet i din stege', 5: 'högsta kortet i din färg', 6: 'trissen i din kåk', 7: 'ditt fyrtal', 8: 'högsta kortet i din färgstege' };
@@ -72,7 +73,7 @@ export class Game {
     this.discard = [];
     this.openOffer = null;
     this.awaiting = null;
-    this.say(`Giv ${this.giv} börjar. ${this.players[this.dealer].name} ger.`);
+    this.say(T.giv.start(this.giv, this.players[this.dealer].name));
     this.step();
   }
 
@@ -88,13 +89,22 @@ export class Game {
     this.budAsked = new Set();
     this.budOrder = [];
     for (let k = 0; k < this.players.length; k++) this.budOrder.push((this.dealer + 1 + k) % this.players.length);
-    this.say(`Budgivning ${when}: ${this.players[this.budOrder[0]].name} säger först.`);
+    this.say(T.bud.start(when, this.players[this.budOrder[0]].name));
     return this._step();
   }
 
-  // Får spelaren buda med den här handen? Tjuvpassning är förbjuden: slår
-  // handen det aktuella budet, eller likar det med högre kort, måste det sägas.
+  // Får spelaren annonsera den här handen? Samma kategori får utmanas i båda
+  // riktningar: ingen av spelarna kan se den andras hand, halveringen avgör
+  // vem som har den högre. Tjuvpassning (passa och sedan annonsera) är förbjuden.
   canBid(ev) {
+    if (this.budCat === 0) return ev.cat > 0;
+    if (ev.cat > this.budCat) return true;
+    return ev.cat === this.budCat && this.budAnnounced !== null;
+  }
+
+  // Måste handen sägas? Endast en hand som säkert slår budet är tvingad; ett
+  // utmaningsbud i samma kategori är frivilligt eftersom utgången är okänd.
+  mustSay(ev) {
     if (this.budCat === 0) return ev.cat > 0;
     if (ev.cat > this.budCat) return true;
     return ev.cat === this.budCat && !!this.budEv && compareHands(ev, this.budEv) > 0;
@@ -110,7 +120,7 @@ export class Game {
         // till budhållaren innan händerna jämförs.
         const prevIdx = this.budAnnounced;
         this.halv = { asker: i, target: prevIdx, cat: ev.cat, n: 0, comp: 0, name: handName(ev), ev: { cat: ev.cat, tie: ev.tie.slice() } };
-        this.say(`${this.players[i].name} säger ${handName(ev)} och delar med ${this.players[prevIdx].name}. Halvering: ${this.players[i].name} får fråga.`);
+        this.say(T.halv.delar(this.players[i].name, this.players[prevIdx].name, handName(ev)));
         this.awaiting = { player: i, action: 'halvAsk', target: prevIdx, cat: ev.cat, label: halvCompLabel(ev.cat, 0) };
         this.emit({ type: 'await', awaiting: this.awaiting });
         return;
@@ -120,63 +130,62 @@ export class Game {
       this.budName = handName(ev);
       this.budEv = { cat: ev.cat, tie: ev.tie.slice() };
       this.budNote = null;
-      this.say(`${this.players[i].name} säger ${this.budName}.`);
+      this.say(T.bud.annons(this.players[i].name, this.budName));
     } else {
-      this.say(`${this.players[i].name} är tyst.`);
+      this.say(T.bud.tyst(this.players[i].name));
     }
     this.awaiting = null;
     if (this.budAsked.size < this.budOrder.length) return this.step();
     return this.resolveBud();
   }
 
-  // Halvering: delaren frågar budhållaren över eller under en valör.
+  // Halvering (issue 86): frågeställaren ställer EN fråga per avgörande
+  // komponent, vid sitt EGET värde. Över = budhållaren behåller, under =
+  // frågeställaren tar budet, exakt = nästa avgörande komponent. Svaret avgör
+  // alltid direkt, ingen blind slutjämförelse behövs.
   halvAsk(i, n) {
     if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAsk' || this.awaiting.player !== i) return;
+    const label = halvCompLabel(this.halv.cat, this.halv.comp);
+    const value = (n === undefined || n === null) ? evaluate5(this.players[i].hand).tie[this.halv.comp] : n;
     this.halv.n++;
-    this.say(`${this.players[i].name} frågar ${this.players[this.halv.target].name}: har ${halvCompLabel(this.halv.cat, this.halv.comp)} över eller under ${rankLabel(n)}?`);
-    this.awaiting = { player: this.halv.target, action: 'halvAnswer', n, label: halvCompLabel(this.halv.cat, this.halv.comp), asker: this.halv.asker };
+    this.say(T.halv.fraga(this.players[i].name, this.players[this.halv.target].name, label, rankLabel(value)));
+    this.awaiting = { player: this.halv.target, action: 'halvAnswer', n: value, label, asker: this.halv.asker };
   }
 
   halvAnswer(i, ans) {
     if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAnswer' || this.awaiting.player !== i) return;
-    this.say(`${this.players[i].name} svarar: ${ans}.`);
-    const n = this.awaiting.n;
-    if (ans === 'exakt') {
-      const askerTie = evaluate5(this.players[this.halv.asker].hand).tie;
-      if (askerTie[this.halv.comp] === n && this.halv.comp < askerTie.length - 1) {
-        this.halv.comp++;
-        this.say(`Samma valör: halveringen fortsätter med ${halvCompLabel(this.halv.cat, this.halv.comp)}.`);
-      }
+    const h = this.halv;
+    this.say(T.halv.svar(this.players[i].name, T.halv.svarText[ans] || ans)); // svaret syns alltid i loggen (issue 87)
+    if (ans === 'över') {
+      this.halv = null; this.awaiting = null;
+      this.say(T.halv.over(this.players[h.target].name));
+      return this.budAsked.size < this.budOrder.length ? this.step() : this.resolveBud();
     }
-    this.awaiting = { player: this.halv.asker, action: 'halvAsk', target: this.halv.target, cat: this.halv.cat, label: halvCompLabel(this.halv.cat, this.halv.comp) };
-  }
-
-  halvDone(i) {
-    if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAsk' || this.awaiting.player !== i) return;
-    const h = this.halv; this.halv = null;
-    if (compareHands(h.ev, this.budEv) > 0) {
-      this.budAnnounced = h.asker;
-      this.budCat = h.cat;
-      this.budName = h.name;
-      this.budEv = h.ev;
-      this.budNote = 'övertog budet';
-      this.say(`${this.players[h.asker].name} övertar budet (högre än ${this.players[h.target].name}).`);
-    } else {
-      this.say(`${this.players[this.budAnnounced].name} behåller budet.`);
+    if (ans === 'under') {
+      this.budAnnounced = h.asker; this.budCat = h.cat; this.budName = h.name; this.budEv = h.ev; this.budNote = 'övertog budet';
+      this.halv = null; this.awaiting = null;
+      this.say(T.halv.under(this.players[h.asker].name));
+      return this.budAsked.size < this.budOrder.length ? this.step() : this.resolveBud();
     }
-    this.awaiting = null;
-    if (this.budAsked.size < this.budOrder.length) return this.step();
-    return this.resolveBud();
+    if (this.halv.comp < h.ev.tie.length - 1) {
+      this.halv.comp++;
+      this.say(T.halv.vidare(halvCompLabel(h.cat, this.halv.comp)));
+      this.awaiting = { player: h.asker, action: 'halvAsk', target: h.target, cat: h.cat, label: halvCompLabel(h.cat, this.halv.comp) };
+      return;
+    }
+    this.halv = null; this.awaiting = null;
+    this.say(T.halv.lika(this.players[h.target].name));
+    return this.budAsked.size < this.budOrder.length ? this.step() : this.resolveBud();
   }
 
   budPass(i) {
     if (this.phase !== 'bud' || !this.awaiting || this.awaiting.action !== 'bud' || this.awaiting.player !== i) return;
     const ev = evaluate5(this.players[i].hand);
-    if (this.canBid(ev)) { // tjuvpassning: handen måste sägas
-      this.say(`${this.players[i].name} får inte tjuvpassa, ${handName(ev)} måste sägas.`);
+    if (this.mustSay(ev)) { // tjuvpassning: en hand som säkert slår budet måste sägas
+      this.say(T.bud.tjuvpassning(this.players[i].name, handName(ev)));
       return; // samma spelare väntar fortfarande
     }
-    this.say(`${this.players[i].name} är tyst.`);
+    this.say(T.bud.tyst(this.players[i].name));
     this.awaiting = null;
     if (this.budAsked.size < this.budOrder.length) return this.step();
     return this.resolveBud();
@@ -197,10 +206,10 @@ export class Game {
       }
       this.players[wi].points += pts;
       this.players[wi].lastScoredCat = this.budCat;
-      this.say(`${this.players[wi].name} får ${pts} p för ${this.budName} ${this.budWhen}.`);
+      this.say(T.bud.poang(this.players[wi].name, pts, this.budName, this.budWhen));
       this.emit({ type: 'score', when: this.budWhen, player: wi, pts, name: this.budName, viaBud: true });
     } else {
-      this.say(`Ingen bjuder ${this.budWhen}, ingen handpoäng.`);
+      this.say(T.bud.ingen(this.budWhen));
       this.emit({ type: 'score', when: this.budWhen, scored: null });
     }
     this.phase = this.budNextPhase;
@@ -213,7 +222,7 @@ export class Game {
     const f = this.fyrtalPending;
     this.players[f.player].points += f.pts;
     this.players[f.player].lastScoredCat = 7;
-    this.say(`${this.players[f.player].name} tar ${f.pts} p för ${f.name}.`);
+    this.say(T.fyrtal.tar(this.players[f.player].name, f.pts, f.name));
     this.emit({ type: 'score', player: f.player, pts: f.pts, name: f.name });
     this.fyrtalPending = null;
     this.awaiting = null;
@@ -226,7 +235,7 @@ export class Game {
     const f = this.fyrtalPending;
     this.fyrtalZeroUsed = true;
     for (const pl of this.players) { pl.points = 0; pl.kopstopp = false; }
-    this.say(`${this.players[i].name} nollställer alla poäng i stället för att ta ${f.pts} p för ${f.name}! Bara en gång per parti.`);
+    this.say(T.fyrtal.nollstaller(this.players[i].name, f.pts, f.name));
     this.emit({ type: 'score', player: i, pts: 0, name: 'Nollställning' });
     this.fyrtalPending = null;
     this.awaiting = null;
@@ -249,7 +258,7 @@ export class Game {
       const card = this.talong[this.talong.length - 1];
       this.openOffer = { player: i, idx: idxs[0], card };
       this.awaiting = { player: i, action: 'openOffer', card };
-      this.say(`Öppet kort: ${cardLabel(card)} — ${p.name} väljer.`);
+      this.say(T.giv.oppetKort(cardLabel(card), p.name));
       this.emit({ type: 'await', awaiting: this.awaiting });
       return;
     }
@@ -266,7 +275,7 @@ export class Game {
     const mustShow = removed.length > 0 && p.lastScoredCat >= 1;
     this.awaiting = null;
     this.emit({ type: 'exchange', player: i, count: removed.length, mustShow });
-    this.say(`${p.name} byter ${removed.length} kort${mustShow ? ' (visar byteskorten)' : ''}.`);
+    this.say(T.giv.bytKort(p.name, removed.length, mustShow));
     this.step();
   }
 
@@ -274,7 +283,7 @@ export class Game {
     if (this.talong.length || !this.discard.length) return;
     this.talong = shuffle(this.discard, this.rng);
     this.discard = [];
-    this.say(`Talongen tog slut. Skräphögen (${this.talong.length} kort) blandas till ny talong.`);
+    this.say(T.giv.talongTogSlut(this.talong.length));
     this.emit({ type: 'reshuffle' });
   }
 
@@ -290,16 +299,16 @@ export class Game {
     if (take) {
       const open = this.talong.pop();
       p.hand.push(open);
-      this.say(`${p.name} tog det öppna kortet (${cardLabel(open)}).`);
+      this.say(T.giv.togOppet(p.name, cardLabel(open)));
     } else {
       const open = this.talong.pop();
       this.discard.push(open);
       this.refillTalong();
       if (this.talong.length) {
         p.hand.push(this.talong.pop());
-        this.say(`${p.name} slängde det öppna kortet och tog ett stängt.`);
+        this.say(T.giv.slangOppetStangt(p.name));
       } else {
-        this.say(`${p.name} slängde det öppna kortet; talongen tog slut, inget nytt kort.`);
+        this.say(T.giv.slangOppetTajt(p.name));
       }
     }
     this.exchanged.add(i);
@@ -309,7 +318,7 @@ export class Game {
 
   bidChicago(i) {
     this.bid = i;
-    this.say(`${this.players[i].name} budar CHICAGO! Alla fem stick måste tas.`);
+    this.say(T.stick.chicago(this.players[i].name));
     this.emit({ type: 'bid', player: i });
     this.awaiting = null;
     this.step();
@@ -325,7 +334,7 @@ export class Game {
     this.trickNo = 0;
     this.trickCards = [];
     this.leader = (this.dealer + 1) % this.players.length;
-    if (this.bid != null) this.say(`Sticken börjar. ${this.players[this.bid].name} måste ta alla fem.`);
+    if (this.bid != null) this.say(T.stick.borjar(this.players[this.bid].name));
     this.step();
   }
 
@@ -335,7 +344,7 @@ export class Game {
     if (!Number.isInteger(cardIdx) || cardIdx < 0 || cardIdx >= p.hand.length) return;
     const mustSuit = this.awaiting.mustSuit;
     if (mustSuit != null && p.hand.some(c => c.s === mustSuit) && p.hand[cardIdx].s !== mustSuit) {
-      this.say(`${p.name} måste följa färgen.`);
+      this.say(T.stick.foljFargen(p.name));
       return;
     }
     const card = p.hand.splice(cardIdx, 1)[0];
@@ -394,7 +403,7 @@ export class Game {
         for (const tc of this.trickCards) if (tc.card.s === ledSuit && tc.card.r > winR) { winIdx = tc.player; winR = tc.card.r; }
         this.tricksWon[winIdx]++;
         const winCard = this.trickCards.find(t => t.player === winIdx).card;
-        this.say(`${this.players[winIdx].name} tar stick ${this.trickNo + 1} med ${cardLabel(winCard)}.`);
+        this.say(T.stick.vinner(this.players[winIdx].name, this.trickNo + 1, cardLabel(winCard)));
         this.discard.push(...this.trickCards.map(t => t.card));
         this.trickCards = [];
         this.trickNo++;
@@ -414,10 +423,10 @@ export class Game {
       if (this.bid !== null && this.bid === lastWinner) {
         // Lyckat Chicago: endast Chicago-poängen, ingen annan poäng denna giv
         this.players[this.bid].points += RULES.chicagoGain;
-        this.say(`${this.players[this.bid].name} lyckades med Chicago-budet: +${RULES.chicagoGain} p, given ger inga andra poäng.`);
+        this.say(T.stick.chicagoLyckat(this.players[this.bid].name, RULES.chicagoGain));
       } else {
       this.players[lastWinner].points += RULES.lastTrick;
-      this.say(`${this.players[lastWinner].name} tar sista sticket: +${RULES.lastTrick} p.`);
+      this.say(T.stick.sistaSticket(this.players[lastWinner].name, RULES.lastTrick));
       const evs = this.sluthand.map(h => evaluate5(h));
       let best = evs[0];
       for (const e of evs) if (compareHands(e, best) > 0) best = e;
@@ -435,15 +444,15 @@ export class Game {
           }
           const pts = handPoints(best);
           this.players[holders[0]].points += pts;
-          this.say(`Sluthand: ${this.players[holders[0]].name} får ${pts} p för ${handName(best)}.`);
+          this.say(T.stick.sluthand(this.players[holders[0]].name, pts, handName(best)));
         } else {
-          this.say('Lika bästa sluthänder, ingen poäng.');
+          this.say(T.stick.likaSluthander());
         }
       }
       }
     } else {
       this.players[this.bid].points -= RULES.chicagoLoss;
-      this.say(`Chicago-budet bröts. ${this.players[this.bid].name} får −${RULES.chicagoLoss} p och given avslutas direkt.`);
+      this.say(T.stick.brotet(this.players[this.bid].name, RULES.chicagoLoss));
     }
     this.finishEndGiv();
   }
@@ -452,7 +461,7 @@ export class Game {
     for (const p of this.players) {
       if (p.points >= RULES.kopstopp && !p.kopstopp) {
         p.kopstopp = true;
-        this.say(`${p.name} har köpstopp vid ${p.points} p och byter inte fler kort.`);
+        this.say(T.kop.kopstopp(p.name, p.points));
       }
     }
     this.history.push({ giv: this.giv, scores: this.players.map(p => p.points) });
@@ -464,12 +473,12 @@ export class Game {
       if (winners.length === 1) {
         this.over = true;
         this.winner = winners[0];
-        this.say(`${this.winner.name} vinner partiet med ${top} poäng!`);
+        this.say(T.slut.vinner(this.winner.name, top));
         this.emit({ type: 'gameOver', winner: this.winner.name, points: top });
         this.awaiting = null;
         return;
       }
-      this.say('Oavgjort i toppen, partiet fortsätter.');
+      this.say(T.slut.oavgjort());
     }
     this.phase = 'givEnd';
     this.awaiting = { action: 'nextGiv' };

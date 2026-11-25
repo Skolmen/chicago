@@ -1,8 +1,9 @@
 // Gränssnitt och spellopning för Chicago i webbläsaren.
 
-import { Game, RULES } from './engine.js?v=24';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js?v=24';
-import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js?v=24';
+import { Game, RULES } from './engine.js?v=25';
+import { T } from './texts.js?v=25';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud, botHalvAsk, botHalvAnswer } from './bot.js?v=25';
+import { SUITS, rankLabel, cardLabel, evaluate5, handName, compareHands, CAT_NAMES } from './poker.js?v=25';
 
 const HUMAN = 0;
 const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
@@ -20,6 +21,17 @@ const el = {};
 for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logDrawer', 'logBackdrop', 'logClose', 'openCard', 'logBtn', 'logCount', 'logDot']) {
   el[id] = document.getElementById(id);
 }
+
+function initPageTexts() {
+  document.title = T.ui.title;
+  const h1 = document.getElementById('gameTitle');
+  if (h1) h1.textContent = T.ui.h1;
+  const lh = document.getElementById('logHeadText');
+  if (lh) lh.textContent = T.ui.logg;
+  const lb = document.getElementById('logBtn');
+  if (lb && lb.setAttribute) lb.setAttribute('aria-label', T.ui.logg);
+}
+initPageTexts();
 
 function startGame() {
   archiveCurrent(); // pågående parti hamnar i arkivet i stället för att försvinna
@@ -57,8 +69,8 @@ function button(label, cls, fn) {
 function render() {
   if (!game) return;
   const p = game.players, a = game.awaiting;
-  el.givLabel.textContent = `Giv ${game.giv} · ${p[game.dealer].name} ger`;
-  const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', bud: 'Budgivning', fyrtalVal: 'Fyrtal eller nollställ', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
+  el.givLabel.textContent = T.ui.givLabel(game.giv, p[game.dealer].name);
+  const phaseNames = { kop1: T.ui.kop(1), kop2: T.ui.kop(2), kop3: T.ui.kop(3), bud: T.ui.phaseBud, fyrtalVal: T.ui.fyrtalTa, chicago: T.ui.phaseChicago, tricks: T.ui.phaseStick, givEnd: T.ui.phaseGivEnd };
   el.phaseLabel.textContent = (phaseNames[game.phase] || '') + (game.bid !== null && game.bid !== undefined ? ` – ${p[game.bid].name} har budat Chicago` : '');
   el.talongInfo && (el.talongInfo.textContent = `Talong: ${game.talong.length} kort`);
 
@@ -110,7 +122,7 @@ function render() {
       if (!tcs.length) {
         const cap = document.createElement('div');
         cap.className = 'trickCap';
-        cap.textContent = 'Förra sticket';
+        cap.textContent = T.ui.forraSticket;
         el.trickArea.appendChild(cap);
       }
       for (const tc of vis) {
@@ -165,9 +177,9 @@ function render() {
   el.actions.innerHTML = '';
   if (game.over) return;
   if (a && a.action === 'fyrtalVal' && a.player === HUMAN) {
-    el.tableMsg.textContent = game.fyrtalZeroUsed ? `Fyrtal: ta ${game.fyrtalPending.pts} p.` : 'Fyrtal! Ta poängen, eller nollställ alla poäng (bara en gång per parti).';
+    el.tableMsg.textContent = game.fyrtalZeroUsed ? `Fyrtal: ta ${game.fyrtalPending.pts} p.` : T.ui.fyrtalMsg;
     el.actions.appendChild(button(`Ta ${game.fyrtalPending.pts} p`, 'primary', () => game.fyrtalTake(HUMAN)));
-    if (!game.fyrtalZeroUsed) el.actions.appendChild(button('Nollställ alla poäng', 'danger', () => game.fyrtalZero(HUMAN)));
+    if (!game.fyrtalZeroUsed) el.actions.appendChild(button(T.ui.nollstall, 'danger', () => game.fyrtalZero(HUMAN)));
   }
   if (a && a.player === HUMAN) {
     if (a.action === 'exchange') {
@@ -175,54 +187,55 @@ function render() {
         game.exchange(HUMAN, [...selected]);
         selected = new Set();
       }));
-      if (selected.size === 1) el.actions.appendChild(button('Byt stängt (utan öppet kort)', '', () => {
+      if (selected.size === 1) el.actions.appendChild(button(T.ui.bytStangt, '', () => {
         game.exchange(HUMAN, [...selected], true);
         selected = new Set();
       }));
-      if (selected.size) el.actions.appendChild(button('Rensa val', '', () => { selected = new Set(); render(); }));
-      el.tableMsg.textContent = 'Välj kort att byta (eller byt inga).';
+      if (selected.size) el.actions.appendChild(button(T.ui.rensa, '', () => { selected = new Set(); render(); }));
+      el.tableMsg.textContent = T.ui.valjKort;
     } else if (a.action === 'openOffer') {
-      el.tableMsg.textContent = 'Ta det öppna kortet, eller släng det och dra ett stängt.';
-      el.actions.appendChild(button('Ta det öppna kortet', 'primary', () => { game.resolveOpen(HUMAN, true); selected = new Set(); }));
-      el.actions.appendChild(button('Släng det och dra ett stängt', '', () => { game.resolveOpen(HUMAN, false); selected = new Set(); }));
+      el.tableMsg.textContent = T.ui.taEllerSlang;
+      el.actions.appendChild(button(T.ui.taOppet, 'primary', () => { game.resolveOpen(HUMAN, true); selected = new Set(); }));
+      el.actions.appendChild(button(T.ui.slangDra, '', () => { game.resolveOpen(HUMAN, false); selected = new Set(); }));
     } else if (a.action === 'bud') {
       const mine = evaluate5(game.players[HUMAN].hand);
       const bestEv = a.bestEv || null;
-      const kanBjuda = a.bestCat === 0 ? mine.cat > 0 : (mine.cat > a.bestCat || (mine.cat === a.bestCat && bestEv && compareHands(mine, bestEv) > 0));
-      el.tableMsg.textContent = (a.bestName ? `Redan sagt: ${a.bestName} (${p[game.budAnnounced]?.name ?? ''}${game.budNote ? ', övertog budet' : ''}). ` : 'Ingen har sagt något ännu. ') + (kanBjuda ? 'Du måste säga.' : 'Du kan vara tyst.');
-      if (kanBjuda) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
-      else el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
+      const kanBjuda = a.bestCat === 0 ? mine.cat > 0 : (mine.cat > a.bestCat || mine.cat === a.bestCat);
+      const mustSay = a.bestCat === 0 ? mine.cat > 0 : (mine.cat > a.bestCat || (mine.cat === a.bestCat && bestEv && compareHands(mine, bestEv) > 0));
+      el.tableMsg.textContent = (a.bestName ? `${T.ui.redanSagt(a.bestName)} (${p[game.budAnnounced]?.name ?? ''}${game.budNote ? T.ui.overtog : ''}). ` : T.ui.ingenSagt()) + (mustSay ? T.ui.duMaste : (kanBjuda && mine.cat === a.bestCat ? T.ui.duKanUtmana : T.ui.duKanTyst));
+      if (kanBjuda) el.actions.appendChild(button(T.ui.saga(handName(mine)), 'primary', () => game.announceBud(HUMAN)));
+      else el.actions.appendChild(button(T.ui.tyst, '', () => game.budPass(HUMAN)));
     } else if (a.action === 'halvAsk') {
-      el.tableMsg.textContent = `Halvering: du delar ${CAT_NAMES[game.halv.cat]} med ${p[a.target].name}. Frågan gäller: ${a.label}.`;
-      for (const n of [2,3,4,5,6,7,8,9,10,11,12,13,14]) el.actions.appendChild(button(`Ö/U ${rankLabel(n)}`, '', () => game.halvAsk(HUMAN, n)));
-      el.actions.appendChild(button('Nöjd, jämför nu', 'primary', () => game.halvDone(HUMAN)));
+      const tie = evaluate5(game.players[HUMAN].hand).tie;
+      el.tableMsg.textContent = T.ui.halvDuDelar(CAT_NAMES[game.halv.cat], p[a.target].name, a.label) + ' ' + T.ui.halvDittVarde(rankLabel(tie[game.halv.comp]));
+      el.actions.appendChild(button(T.ui.halvStallFragan, 'primary', () => game.halvAsk(HUMAN)));
     } else if (a.action === 'halvAnswer') {
-      el.tableMsg.textContent = `Halvering: ${p[a.asker].name} frågar: har ${a.label} över eller under ${rankLabel(a.n)}? Svara sanningsenligt.`;
-      el.actions.appendChild(button('Över', '', () => game.halvAnswer(HUMAN, 'över')));
-      el.actions.appendChild(button('Under', '', () => game.halvAnswer(HUMAN, 'under')));
-      el.actions.appendChild(button('Exakt', '', () => game.halvAnswer(HUMAN, 'exakt')));
+      el.tableMsg.textContent = T.ui.halvDuSvarar(p[a.asker].name, a.label, rankLabel(a.n));
+      el.actions.appendChild(button(T.ui.over, '', () => game.halvAnswer(HUMAN, 'över')));
+      el.actions.appendChild(button(T.ui.under, '', () => game.halvAnswer(HUMAN, 'under')));
+      el.actions.appendChild(button(T.ui.exakt, '', () => game.halvAnswer(HUMAN, 'exakt')));
     } else if (a.action === 'chicago') {
-      el.tableMsg.textContent = 'Du kan buda Chicago: lova att ta alla fem stick.';
-      el.actions.appendChild(button('Buda Chicago', 'primary danger', () => game.bidChicago(HUMAN)));
-      el.actions.appendChild(button('Tacka nej', '', () => game.passChicago()));
+      el.tableMsg.textContent = T.ui.chicagoInfo;
+      el.actions.appendChild(button(T.ui.budaChicago, 'primary danger', () => game.bidChicago(HUMAN)));
+      el.actions.appendChild(button(T.ui.tackaNej, '', () => game.passChicago()));
     } else if (a.action === 'play') {
-      el.tableMsg.textContent = a.mustSuit == null ? 'Spel ut vilket kort som helst.' : `Följ ${['spader', 'hjärter', 'ruter', 'klöver'][a.mustSuit]} om du kan.`;
+      el.tableMsg.textContent = a.mustSuit == null ? T.ui.spelUtVad : T.ui.foljFarg(['spader', 'hjärter', 'ruter', 'klöver'][a.mustSuit]);
     }
   } else if (a && a.action === 'nextGiv') {
-    showOverlay(givSummary(), [button('Nästa giv', 'primary', () => { hideOverlay(); game.nextGiv(); })]);
+    showOverlay(givSummary(), [button(T.ui.nastaGiv, 'primary', () => { hideOverlay(); game.nextGiv(); })]);
   } else {
-    el.tableMsg.textContent = `${p[a?.player ?? 1].name} tänker...`;
+    el.tableMsg.textContent = T.ui.tunker(p[a?.player ?? 1].name);
   }
 }
 
 function scoreTableHtml() {
   const p = game.players;
-  let html = `<h2>Poängtabell</h2><table class="scoretable"><tr><th>Giv</th>${p.map(x => `<th>${x.name}</th>`).join('')}</tr>`;
+  let html = `<h2>${T.ui.poangtabell}</h2><table class="scoretable"><tr><th>${T.ui.givRad}</th>${p.map(x => `<th>${x.name}</th>`).join('')}</tr>`;
   game.history.forEach((row, i) => {
     html += `<tr><td>${i + 1}</td>${row.scores.map(s => `<td>${s}</td>`).join('')}</tr>`;
   });
-  html += `<tr class="total"><td>Totalt</td>${p.map(x => `<td>${x.points}</td>`).join('')}</tr></table>`;
-  html += `<p class="mini">Först till ${RULES.target} poäng när given är klar vinner partiet.</p>`;
+  html += `<tr class="total"><td>${T.ui.totalt}</td>${p.map(x => `<td>${x.points}</td>`).join('')}</tr></table>`;
+  html += `<p class="mini">${T.ui.forstTill(RULES.target)}</p>`;
   return html;
 }
 
@@ -242,8 +255,8 @@ function showGameOver() {
   const youWon = game.winner === game.players[HUMAN];
   const rows = game.players.map(pl =>
     `<div class="scoreline${pl === game.winner ? ' win' : ''}"><span>${pl.name}</span><strong>${pl.points} p</strong></div>`).join('');
-  showOverlay(`<h2>${youWon ? 'Du vann!' : `${game.winner.name} vann`}</h2>${rows}
-    <p class="mini">Först till ${RULES.target} poäng när given är färdig.</p>`, [button('Nytt parti', 'primary', startGame)]);
+  showOverlay(`<h2>${youWon ? T.ui.duVann : T.ui.vann(game.winner.name)}</h2>${rows}
+    <p class="mini">${T.ui.forstTillKlar(RULES.target)}</p>`, [button(T.ui.nyttParti, 'primary', startGame)]);
 }
 
 // Botens turer körs med liten fördröjning så det känns som ett spel.
@@ -263,7 +276,7 @@ function maybeBot() {
     if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
     else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
     else if (cur.action === 'bud') botBud(game.players[i].hand, cur.bestCat, cur.bestEv) != null ? game.announceBud(i) : game.budPass(i);
-    else if (cur.action === 'halvAsk') (game.halv.n === 0 || (game.halv.comp > 0 && game.halv.n === 1)) ? game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp)) : game.halvDone(i);
+    else if (cur.action === 'halvAsk') game.halvAsk(i, botHalvAsk(game.players[i].hand, game.halv.comp));
     else if (cur.action === 'halvAnswer') game.halvAnswer(i, botHalvAnswer(game.players[i].hand, cur.n, game.halv ? game.halv.comp : 0));
     else if (cur.action === 'fyrtalVal') game.fyrtalTake(i);
     else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
@@ -328,17 +341,17 @@ function showArchive() {
   const list = loadArchive();
   const btns = [];
   list.forEach((item, i) => {
-    btns.push(button(`Öppna ${i + 1}: ${item.name}`, i === 0 ? 'primary' : '', () => { openArchived(item); }));
-    btns.push(button(`Ta bort ${i + 1}`, 'danger', () => { const l = loadArchive(); l.splice(i, 1); saveArchive(l); showArchive(); }));
+    btns.push(button(T.ui.oppna(i + 1, item.name), i === 0 ? 'primary' : '', () => { openArchived(item); }));
+    btns.push(button(T.ui.taBort(i + 1), 'danger', () => { const l = loadArchive(); l.splice(i, 1); saveArchive(l); showArchive(); }));
   });
-  btns.push(button('Tillbaka till menyn', 'primary', () => showMenu()));
-  showOverlay(`<h2>Arkiv</h2>${list.length ? '' : '<p class="mini">Inga sparade partier.</p>'}`, btns);
+  btns.push(button(T.ui.tillbaka, 'primary', () => showMenu()));
+  showOverlay(`<h2>${T.ui.arkiv}</h2>${list.length ? '' : `<p class="mini">${T.ui.ingaSparade}</p>`}`, btns);
 }
 
 // --- Meny ---
 function standingsHtml() {
   const rows = game.players.map(p => ({ name: p.name, pts: p.points })).sort((x, y) => y.pts - x.pts);
-  let html = `<div class="standings"><div class="standcap">Giv ${game.giv} · ${game.players[game.dealer].name} ger · först till ${RULES.target} p</div>`;
+  let html = `<div class="standings"><div class="standcap">${T.ui.standcap(game.giv, game.players[game.dealer].name, RULES.target)}</div>`;
   rows.forEach((r, k) => {
     const lead = k === 0 && rows.length > 1 && r.pts > rows[1].pts;
     html += `<div class="standrow${lead ? ' lead' : ''}"><span class="standrank">${k + 1}</span><span class="standname">${r.name}</span><span class="standpts">${r.pts} p</span></div>`;
@@ -349,30 +362,30 @@ function showNewGame() {
   const n = chosenOpponents();
   const btns = [];
   for (let k = 1; k <= 3; k++) {
-    btns.push(button(`Starta mot ${k} dator${k > 1 ? 'er' : ''}`, k === n ? 'primary' : '', () => {
+    btns.push(button(T.ui.startaMot(k), k === n ? 'primary' : '', () => {
       try { localStorage.setItem(OPP_KEY, String(k)); } catch (_) {}
       hideOverlay();
       startGame();
     }));
   }
-  btns.push(button('Tillbaka till menyn', '', () => showMenu()));
-  showOverlay(`<h2>Nytt parti</h2><p class="mini">Hur många datorer? Totalt 2-4 spelare. (Med fler än 4 kan talongen ta slut, skräphögen blandas då enligt reglerna.)</p>`, btns);
+  btns.push(button(T.ui.tillbaka, '', () => showMenu()));
+  showOverlay(`<h2>${T.ui.nyttPartiRubrik}</h2><p class="mini">${T.ui.antalDatorer}</p>`, btns);
 }
 
 function showMenu(title) {
   const hasSave = !!restoreGame();
   const btns = [];
-  if (hasSave) btns.push(button('Fortsätt sparade partiet', 'primary', () => {
+  if (hasSave) btns.push(button(T.ui.fortsattSparat, 'primary', () => {
     const g = restoreGame();
     if (g) { game = g; game.onEvent = handleEvent; }
     hideOverlay(); render(); maybeBot(); saveGame();
   }));
-  if (game && !game.over) btns.push(button('Poängtabell', '', () => showOverlay(scoreTableHtml(), [button('Tillbaka till menyn', '', () => showMenu(title))])));
-  if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
-  btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
-  btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => showNewGame()));
-  btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
-  let head = `<h2>${title || 'Meny'}</h2>`;
+  if (game && !game.over) btns.push(button(T.ui.poangtabell, '', () => showOverlay(scoreTableHtml(), [button(T.ui.tillbaka, '', () => showMenu(title))])));
+  if (game && !game.over) btns.push(button(T.ui.sparaParti, '', () => { archiveCurrent(); showMenu(T.ui.sparat); }));
+  btns.push(button(loadArchive().length ? T.ui.arkivAntal(loadArchive().length) : T.ui.arkiv, '', () => showArchive()));
+  btns.push(button(T.ui.nyttParti, hasSave ? '' : 'primary', () => showNewGame()));
+  btns.push(button(T.ui.stang, '', () => { hideOverlay(); render(); }));
+  let head = `<h2>${title || T.ui.meny}</h2>`;
   if (game && !game.over) head += standingsHtml();
   showOverlay(head, btns);
 }
