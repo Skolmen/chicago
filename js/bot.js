@@ -67,6 +67,18 @@ export function botPlay({ hand, trickCards, mustSuit, isBidder, opponentBid, tri
   return lowest();
 }
 
+// Halvering (issue 75): boten frågar om budhållarens avgörande valör och svarar sanningsenligt.
+export function botHalvAsk(hand) {
+  const ev = evaluate5(hand);
+  return ev.tie && ev.tie.length ? ev.tie[0] : 7;
+}
+
+export function botHalvAnswer(hand, n) {
+  const ev = evaluate5(hand);
+  const r = ev.tie[0];
+  return r > n ? 'över' : r < n ? 'under' : 'exakt';
+}
+
 // Budgivning: boten säger sin hand ärligt bara om den slår aktuellt bud, annars tyst (null).
 export function botBud(hand, bestCat, bestEv = null) {
   const ev = evaluate5(hand);
