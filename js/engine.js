@@ -1,10 +1,15 @@
 // Spelmotor för svenskt Chicago. Ramverksfri och serialiserbar så att samma
 // moduler senare kan köras på en server för onlinespel.
 
-import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js';
+import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLabel, rankLabel } from './poker.js?v=22';
 
 // Halvering (poängdiskussion): vad frågan gäller per kategori.
 const HALV_LABEL = { 1: 'ditt par', 2: 'ditt bästa par', 3: 'din triss', 4: 'högsta kortet i din stege', 5: 'högsta kortet i din färg', 6: 'trissen i din kåk', 7: 'ditt fyrtal', 8: 'högsta kortet i din färgstege' };
+// Vid exakt samma valör går frågan vidare till nästa avgörande kort (issue 78).
+function halvCompLabel(cat, comp) {
+  if (comp === 0) return HALV_LABEL[cat];
+  return comp === 1 ? 'högsta kortet efteråt' : `kort nummer ${comp + 1}`;
+}
 
 export const RULES = {
   target: 52,        // poäng som krävs för vinst
@@ -103,9 +108,9 @@ export class Game {
         // Poängdiskussion (issue 75): den som delar ställer halveringsfrågor
         // till budhållaren innan händerna jämförs.
         const prevIdx = this.budAnnounced;
-        this.halv = { asker: i, target: prevIdx, cat: ev.cat, n: 0, name: handName(ev), ev: { cat: ev.cat, tie: ev.tie.slice() } };
+        this.halv = { asker: i, target: prevIdx, cat: ev.cat, n: 0, comp: 0, name: handName(ev), ev: { cat: ev.cat, tie: ev.tie.slice() } };
         this.say(`${this.players[i].name} säger ${handName(ev)} och delar med ${this.players[prevIdx].name}. Halvering: ${this.players[i].name} får fråga.`);
-        this.awaiting = { player: i, action: 'halvAsk', target: prevIdx, cat: ev.cat };
+        this.awaiting = { player: i, action: 'halvAsk', target: prevIdx, cat: ev.cat, label: halvCompLabel(ev.cat, 0) };
         this.emit({ type: 'await', awaiting: this.awaiting });
         return;
       }
@@ -127,14 +132,22 @@ export class Game {
   halvAsk(i, n) {
     if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAsk' || this.awaiting.player !== i) return;
     this.halv.n++;
-    this.say(`${this.players[i].name} frågar ${this.players[this.halv.target].name}: har ${HALV_LABEL[this.halv.cat]} över eller under ${rankLabel(n)}?`);
-    this.awaiting = { player: this.halv.target, action: 'halvAnswer', n, label: HALV_LABEL[this.halv.cat], asker: this.halv.asker };
+    this.say(`${this.players[i].name} frågar ${this.players[this.halv.target].name}: har ${halvCompLabel(this.halv.cat, this.halv.comp)} över eller under ${rankLabel(n)}?`);
+    this.awaiting = { player: this.halv.target, action: 'halvAnswer', n, label: halvCompLabel(this.halv.cat, this.halv.comp), asker: this.halv.asker };
   }
 
   halvAnswer(i, ans) {
     if (this.phase !== 'bud' || !this.halv || !this.awaiting || this.awaiting.action !== 'halvAnswer' || this.awaiting.player !== i) return;
     this.say(`${this.players[i].name} svarar: ${ans}.`);
-    this.awaiting = { player: this.halv.asker, action: 'halvAsk', target: this.halv.target, cat: this.halv.cat };
+    const n = this.awaiting.n;
+    if (ans === 'exakt') {
+      const askerTie = evaluate5(this.players[this.halv.asker].hand).tie;
+      if (askerTie[this.halv.comp] === n && this.halv.comp < askerTie.length - 1) {
+        this.halv.comp++;
+        this.say(`Samma valör: halveringen fortsätter med ${halvCompLabel(this.halv.cat, this.halv.comp)}.`);
+      }
+    }
+    this.awaiting = { player: this.halv.asker, action: 'halvAsk', target: this.halv.target, cat: this.halv.cat, label: halvCompLabel(this.halv.cat, this.halv.comp) };
   }
 
   halvDone(i) {

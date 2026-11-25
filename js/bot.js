@@ -1,6 +1,6 @@
 // Enkel bot: heuristiker för byte, Chicago-bud och stickspel.
 
-import { evaluate5, compareHands } from './poker.js';
+import { evaluate5, compareHands } from './poker.js?v=22';
 
 // Vilka kort som ska bytas: behåll kort som bidrar till par/triss, färgdrag
 // eller stegdrag. Returnerar index i handen att slänga.
@@ -68,9 +68,9 @@ export function botPlay({ hand, trickCards, mustSuit, isBidder, opponentBid, tri
 }
 
 // Halvering (issue 75): boten frågar om budhållarens avgörande valör och svarar sanningsenligt.
-export function botHalvAsk(hand) {
+export function botHalvAsk(hand, comp = 0) {
   const ev = evaluate5(hand);
-  return ev.tie && ev.tie.length ? ev.tie[0] : 7;
+  return ev.tie && ev.tie.length ? (ev.tie[comp] ?? ev.tie[ev.tie.length - 1]) : 7;
 }
 
 export function botHalvAnswer(hand, n) {
