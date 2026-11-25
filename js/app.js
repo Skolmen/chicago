@@ -125,9 +125,11 @@ function render() {
   if (a && a.action === 'openOffer') {
     const row = document.createElement('div');
     row.className = 'openrow';
-    row.appendChild(cardEl(a.card));
+    const oc = cardEl(a.card);
+    if (a.player === BOT) oc.classList.add('botThink');
+    row.appendChild(oc);
     const lbl = document.createElement('span');
-    lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer');
+    lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer...');
     row.appendChild(lbl);
     el.actions.appendChild(row);
   }
@@ -196,6 +198,7 @@ function maybeBot() {
   if (a.action === 'nextGiv') return;
   if (a.player !== BOT || botPending) return;
   botPending = true;
+  const wait = a.action === 'openOffer' ? 1600 : 650;
   setTimeout(() => {
     botPending = false;
     if (game.over || !game.awaiting || game.awaiting.player !== BOT) return;
@@ -214,7 +217,7 @@ function maybeBot() {
       });
       game.playCard(BOT, i);
     }
-  }, 650);
+  }, wait);
 }
 
 function handleEvent(e) {
