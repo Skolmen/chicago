@@ -21,6 +21,16 @@ Kortspelet Chicago (svenska regler) i webbläsaren, mobilanpassat. Spela mot dat
 
 Vanlig HTML/CSS/JS (ES-moduler), inget byggsteg, inga beroenden. Spelmotorn i `js/engine.js` är ramverksfri, serialiserbar och UI-oberoende, och kan köras node-mässigt på en server.
 
+## Arkitektur (förberett för riktiga spelare)
+
+Tre skikt hålls isär så att en framtida nätverksspelare kan bytas in utan att regler eller UI ändras:
+
+1. `js/engine.js` – regler och speltillstånd. Ramverksfri, serialiserbar (toJSON/fromJSON) och UI-oberoende; kan köras i node på en server. All kommunikation går via händelser (onEvent) och ett enhetligt beslutsgränssnitt: motorn ställer en fråga i `awaiting` ({player, action, ...}) och en aktör (lokal spelare, bot eller framtida nätverksplayer) svarar genom att anropa samma metoder (exchange, resolveOpen, bidChicago, passChicago, playCard).
+2. `js/bot.js` – beslutspolicy för datorspelare. Ren funktion av handen och läget; samma gränssnitt som en riktig spelare skulle ha.
+3. `js/app.js` – UI, sparade partier och arkiv. Läser bara speltillståndet och ritar; vet inte vem som fattar besluten.
+
+När onlinespel byggs (se Roadmap nedan) kör servern skikt 1, varje klient skikt 3, och skikt 2 ersätts av nätverksinmatning för den fjärranslutna spelaren. Ingen nätverkskod finns i dag.
+
 ## Roadmap: onlinespel
 
 GitHub Pages är statisk värd och kan inte köra en WebSocket-server. Plan:
