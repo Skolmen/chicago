@@ -4,21 +4,26 @@ import { Game, RULES } from './engine.js';
 import { botExchange, botWantsChicago, botPlay, botOpenChoice } from './bot.js';
 import { SUITS, rankLabel, cardLabel } from './poker.js';
 
-const BOT = 1, HUMAN = 0;
-const BOT_NAME = 'Datorn';
+const HUMAN = 0;
+const BOT_NAMES = ['Datorn', 'Datorn 2', 'Datorn 3'];
+const OPP_KEY = 'chicago.opp.v1';
+function chosenOpponents() {
+  try { return Math.min(3, Math.max(1, parseInt(localStorage.getItem(OPP_KEY), 10) || 1)); }
+  catch (_) { return 1; }
+}
 
 let game = null;
 let selected = new Set();
 let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botCards', 'botInfo', 'tableMsg', 'log', 'playerCards', 'actions', 'scoreYou', 'scoreBot', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logToggle', 'logCount']) {
+for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logToggle', 'logCount']) {
   el[id] = document.getElementById(id);
 }
 
 function startGame() {
   archiveCurrent(); // pågående parti hamnar i arkivet i stället för att försvinna
-  game = new Game(['Du', BOT_NAME]);
+  game = new Game(['Du', ...BOT_NAMES.slice(0, chosenOpponents())]);
   game.onEvent = handleEvent;
   selected = new Set();
   hideOverlay();
@@ -53,8 +58,6 @@ function render() {
   if (!game) return;
   const p = game.players, a = game.awaiting;
   el.givLabel.textContent = `Giv ${game.giv} · ${p[game.dealer].name} ger`;
-  el.scoreYou.textContent = `${p[HUMAN].name}: ${p[HUMAN].points} p` + (p[HUMAN].kopstopp ? ' (köpstopp)' : '');
-  el.scoreBot.textContent = `${p[BOT].name}: ${p[BOT].points} p`;
   const phaseNames = { kop1: 'Köp 1', kop2: 'Köp 2', kop3: 'Köp 3', chicago: 'Chicago-bud?', tricks: 'Stickspel', givEnd: 'Given avslutad' };
   el.phaseLabel.textContent = (phaseNames[game.phase] || '') + (game.bid !== null && game.bid !== undefined ? ` – ${p[game.bid].name} har budat Chicago` : '');
   el.talongInfo && (el.talongInfo.textContent = `Talong: ${game.talong.length} kort`);
@@ -70,10 +73,21 @@ function render() {
     });
   }
 
-  // Botens hand
-  el.botCards.innerHTML = '';
-  const botCount = p[BOT].hand.length;
-  for (let i = 0; i < botCount; i++) el.botCards.appendChild(backEl());
+  // Datorernas händer (en rad per datorspelare)
+  el.botArea.innerHTML = '';
+  for (let i = 1; i < p.length; i++) {
+    const row = document.createElement('div');
+    row.className = 'botRow';
+    const lbl = document.createElement('span');
+    lbl.className = 'botLabel';
+    lbl.textContent = `${p[i].name} · ${p[i].hand.length} kort` + (a && a.player === i ? ' · tänker...' : '');
+    row.appendChild(lbl);
+    const cards = document.createElement('div');
+    cards.className = 'botCards';
+    for (let k = 0; k < p[i].hand.length; k++) cards.appendChild(backEl());
+    row.appendChild(cards);
+    el.botArea.appendChild(row);
+  }
 
   // Loggen: hopfällbar panel, räknare på knappen, prick vid nyheter
   if (logOpen) {
@@ -142,7 +156,7 @@ function render() {
     const row = document.createElement('div');
     row.className = 'openrow';
     const oc = cardEl(a.card);
-    if (a.player === BOT) oc.classList.add('botThink');
+    if (a.player !== HUMAN) oc.classList.add('botThink');
     row.appendChild(oc);
     const lbl = document.createElement('span');
     lbl.textContent = 'Öppet kort' + (a.player === HUMAN ? ' — ta det eller släng det' : ' — datorn väljer...');
@@ -171,7 +185,7 @@ function render() {
   } else if (a && a.action === 'nextGiv') {
     showOverlay(givSummary(), [button('Nästa giv', 'primary', () => { hideOverlay(); game.nextGiv(); })]);
   } else {
-    el.tableMsg.textContent = `${p[a?.player ?? BOT].name} tänker...`;
+    el.tableMsg.textContent = `${p[a?.player ?? 1].name} tänker...`;
   }
 }
 
@@ -200,9 +214,9 @@ function hideOverlay() { el.overlay.classList.add('hidden'); }
 
 function showGameOver() {
   const youWon = game.winner === game.players[HUMAN];
-  showOverlay(`<h2>${youWon ? 'Du vann!' : `${game.winner.name} vann`}</h2>
-    <div class="scoreline"><span>Du</span><strong>${game.players[HUMAN].points} p</strong></div>
-    <div class="scoreline"><span>${BOT_NAME}</span><strong>${game.players[BOT].points} p</strong></div>
+  const rows = game.players.map(pl =>
+    `<div class="scoreline${pl === game.winner ? ' win' : ''}"><span>${pl.name}</span><strong>${pl.points} p</strong></div>`).join('');
+  showOverlay(`<h2>${youWon ? 'Du vann!' : `${game.winner.name} vann`}</h2>${rows}
     <p class="mini">Först till ${RULES.target} poäng när given är färdig.</p>`, [button('Nytt parti', 'primary', startGame)]);
 }
 
@@ -212,26 +226,27 @@ function maybeBot() {
   const a = game.awaiting;
   if (!a) return;
   if (a.action === 'nextGiv') return;
-  if (a.player !== BOT || botPending) return;
+  if (a.player === HUMAN || botPending) return;
   botPending = true;
   const wait = a.action === 'openOffer' ? 1600 : 650;
   setTimeout(() => {
     botPending = false;
-    if (game.over || !game.awaiting || game.awaiting.player !== BOT) return;
+    if (game.over || !game.awaiting || game.awaiting.player === HUMAN) return;
     const cur = game.awaiting;
-    if (cur.action === 'exchange') game.exchange(BOT, botExchange(game.players[BOT].hand));
-    else if (cur.action === 'openOffer') game.resolveOpen(BOT, botOpenChoice(game.players[BOT].hand, cur.card, game.openOffer.idx));
-    else if (cur.action === 'chicago') botWantsChicago(game.players[BOT].hand, game.players[BOT].points) ? game.bidChicago(BOT) : game.passChicago();
+    const i = cur.player;
+    if (cur.action === 'exchange') game.exchange(i, botExchange(game.players[i].hand));
+    else if (cur.action === 'openOffer') game.resolveOpen(i, botOpenChoice(game.players[i].hand, cur.card, game.openOffer.idx));
+    else if (cur.action === 'chicago') botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
     else if (cur.action === 'play') {
-      const i = botPlay({
-        hand: game.players[BOT].hand,
+      const j = botPlay({
+        hand: game.players[i].hand,
         trickCards: game.trickCards,
         mustSuit: cur.mustSuit,
-        isBidder: game.bid === BOT,
-        opponentBid: game.bid === HUMAN,
+        isBidder: game.bid === i,
+        opponentBid: game.bid != null && game.bid !== i,
         trickNo: game.trickNo
       });
-      game.playCard(BOT, i);
+      game.playCard(i, j);
     }
   }, wait);
 }
@@ -262,7 +277,7 @@ function loadArchive() { try { return JSON.parse(localStorage.getItem(ARCHIVE_KE
 function saveArchive(list) { try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list)); } catch (_) {} }
 function archiveName(g) {
   const d = new Date();
-  return `${d.toLocaleDateString('sv-SE')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · giv ${g.giv} · ${g.players[0].points}p-${g.players[1].points}p`;
+  return `${d.toLocaleDateString('sv-SE')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · giv ${g.giv} · ${g.players.map(x => x.points + 'p').join('-')}`;
 }
 function archiveCurrent() {
   if (!game || game.over) return false;
@@ -300,6 +315,20 @@ function standingsHtml() {
   });
   return html + '</div>';
 }
+function showNewGame() {
+  const n = chosenOpponents();
+  const btns = [];
+  for (let k = 1; k <= 3; k++) {
+    btns.push(button(`Starta mot ${k} dator${k > 1 ? 'er' : ''}`, k === n ? 'primary' : '', () => {
+      try { localStorage.setItem(OPP_KEY, String(k)); } catch (_) {}
+      hideOverlay();
+      startGame();
+    }));
+  }
+  btns.push(button('Tillbaka till menyn', '', () => showMenu()));
+  showOverlay(`<h2>Nytt parti</h2><p class="mini">Hur många datorer? Totalt 2-4 spelare. (Med fler än 4 kan talongen ta slut, skräphögen blandas då enligt reglerna.)</p>`, btns);
+}
+
 function showMenu(title) {
   const hasSave = !!restoreGame();
   const btns = [];
@@ -311,7 +340,7 @@ function showMenu(title) {
   if (game && !game.over) btns.push(button('Poängtabell', '', () => showOverlay(scoreTableHtml(), [button('Tillbaka till menyn', '', () => showMenu(title))])));
   if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
   btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
-  btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => { hideOverlay(); startGame(); }));
+  btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => showNewGame()));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   let head = `<h2>${title || 'Meny'}</h2>`;
   if (game && !game.over) head += standingsHtml();
