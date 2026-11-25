@@ -5,7 +5,7 @@ import { newDeck, shuffle, evaluate5, compareHands, handPoints, handName, cardLa
 
 export const RULES = {
   target: 52,        // poäng som krävs för vinst
-  kopstopp: 46,      // vid minst denna poäng efter avslutad giv får man inte längre byta kort
+  kopstopp: 45,      // har man denna poäng efter avslutad giv har man köpstopp och byter inte kort
   chicagoMin: 15,    // minst så många poäng krävs för att få buda Chicago
   chicagoGain: 15,   // poäng för lyckat Chicago-bud
   chicagoLoss: 15,   // minuspoäng för brutet Chicago-bud
@@ -73,6 +73,7 @@ export class Game {
     this.budAnnounced = null;
     this.budCat = 0;
     this.budName = null;
+    this.budNote = null;
     this.budAsked = new Set();
     this.budOrder = [];
     for (let k = 0; k < this.players.length; k++) this.budOrder.push((this.dealer + 1 + k) % this.players.length);
@@ -98,6 +99,7 @@ export class Game {
       this.budCat = ev.cat;
       this.budName = handName(ev);
       this.budEv = { cat: ev.cat, tie: ev.tie.slice() };
+      this.budNote = prev ? 'övertog budet' : null;
       this.say(prev ? `${this.players[i].name} säger ${this.budName} (högre än ${prev}).` : `${this.players[i].name} säger ${this.budName}.`);
     } else {
       this.say(`${this.players[i].name} är tyst.`);
@@ -407,7 +409,7 @@ export class Game {
       discard: this.discard, openOffer: this.openOffer,
       budWhen: this.budWhen, budNextPhase: this.budNextPhase, budAnnounced: this.budAnnounced,
       budCat: this.budCat, budName: this.budName, budAsked: [...this.budAsked], budOrder: this.budOrder,
-      budEv: this.budEv, fyrtalZeroUsed: this.fyrtalZeroUsed, fyrtalPending: this.fyrtalPending, fyrtalResume: this.fyrtalResume,
+      budEv: this.budEv, budNote: this.budNote, fyrtalZeroUsed: this.fyrtalZeroUsed, fyrtalPending: this.fyrtalPending, fyrtalResume: this.fyrtalResume,
       winner: this.winner ? this.players.indexOf(this.winner) : null,
       log: this.log.slice(-120), history: this.history, awaiting: this.awaiting
     };
@@ -423,7 +425,7 @@ export class Game {
     g.winner = d.winner === null ? null : g.players[d.winner];
     g.budWhen = d.budWhen || null; g.budNextPhase = d.budNextPhase || null; g.budAnnounced = (d.budAnnounced === null || d.budAnnounced === undefined) ? null : d.budAnnounced;
     g.budCat = d.budCat || 0; g.budName = d.budName || null; g.budAsked = new Set(d.budAsked || []); g.budOrder = d.budOrder || [];
-    g.budEv = d.budEv || null; g.fyrtalZeroUsed = !!d.fyrtalZeroUsed; g.fyrtalPending = d.fyrtalPending || null; g.fyrtalResume = d.fyrtalResume || null;
+    g.budEv = d.budEv || null; g.budNote = d.budNote || null; g.fyrtalZeroUsed = !!d.fyrtalZeroUsed; g.fyrtalPending = d.fyrtalPending || null; g.fyrtalResume = d.fyrtalResume || null;
     g.log = d.log || []; g.history = d.history || []; g.awaiting = d.awaiting || null;
     g.discard = d.discard || []; g.openOffer = d.openOffer || null;
     return g;

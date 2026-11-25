@@ -17,7 +17,7 @@ let selected = new Set();
 let lastTrickView = null;
 
 const el = {};
-for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logDrawer', 'logBackdrop', 'logClose', 'openCard', 'menuDot']) {
+for (const id of ['phaseLabel', 'botArea', 'tableMsg', 'log', 'playerCards', 'actions', 'givLabel', 'talongInfo', 'overlay', 'overlayContent', 'trickArea', 'playerChips', 'logDrawer', 'logBackdrop', 'logClose', 'openCard', 'logBtn', 'logCount', 'logDot']) {
   el[id] = document.getElementById(id);
 }
 
@@ -97,7 +97,8 @@ function render() {
     el.log.appendChild(d);
   }
   el.log.scrollTop = el.log.scrollHeight;
-  if (el.menuDot) el.menuDot.classList.toggle('hidden', !(game.log.length > lastSeenLog));
+  if (el.logDot) el.logDot.classList.toggle('hidden', !(game.log.length > lastSeenLog));
+  if (el.logCount) el.logCount.textContent = game.log.length;
 
   // Spelade kort i sticket (pågående, annars förra sticket svagt)
   if (el.trickArea) {
@@ -184,7 +185,7 @@ function render() {
       const mine = evaluate5(game.players[HUMAN].hand);
       const bestEv = a.bestEv || null;
       const kanBjuda = a.bestCat === 0 ? mine.cat > 0 : (mine.cat > a.bestCat || (mine.cat === a.bestCat && bestEv && compareHands(mine, bestEv) > 0));
-      el.tableMsg.textContent = (a.bestName ? `Redan sagt: ${a.bestName}. ` : 'Ingen har sagt något ännu. ') + (kanBjuda ? 'Tjuvpassning är förbjuden, du måste säga.' : 'Du kan vara tyst.');
+      el.tableMsg.textContent = (a.bestName ? `Redan sagt: ${a.bestName} (${p[game.budAnnounced]?.name ?? ''}${game.budNote ? ', övertog budet' : ''}). ` : 'Ingen har sagt något ännu. ') + (kanBjuda ? 'Du måste säga.' : 'Du kan vara tyst.');
       if (kanBjuda) el.actions.appendChild(button(`Säg ${handName(mine)}`, 'primary', () => game.announceBud(HUMAN)));
       else el.actions.appendChild(button('Tyst', '', () => game.budPass(HUMAN)));
     } else if (a.action === 'chicago') {
@@ -355,7 +356,6 @@ function showMenu(title) {
   if (game && !game.over) btns.push(button('Spara parti i arkivet', '', () => { archiveCurrent(); showMenu('Sparat i arkivet'); }));
   btns.push(button(loadArchive().length ? `Arkiv (${loadArchive().length})` : 'Arkiv', '', () => showArchive()));
   btns.push(button('Nytt parti', hasSave ? '' : 'primary', () => showNewGame()));
-  btns.push(button(`Logg${game && game.log.length ? ` (${game.log.length})` : ''}`, '', openLog));
   btns.push(button('Stäng', '', () => { hideOverlay(); render(); }));
   let head = `<h2>${title || 'Meny'}</h2>`;
   if (game && !game.over) head += standingsHtml();
@@ -388,6 +388,7 @@ function boot() {
   el.menuBtn = document.getElementById('menuBtn');
   if (el.menuBtn) el.menuBtn.addEventListener('click', () => showMenu());
   if (el.logClose) el.logClose.addEventListener('click', closeLog);
+  if (el.logBtn) el.logBtn.addEventListener('click', openLog);
   if (el.logBackdrop) el.logBackdrop.addEventListener('click', closeLog);
   const saved = restoreGame();
   if (saved && !saved.over) {
