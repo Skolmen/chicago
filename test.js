@@ -1,7 +1,7 @@
 // Headless-tester: handutvärdering + hela simulerade partier med två botar.
 import { newDeck, shuffle, evaluate5, compareHands, handPoints } from './js/poker.js';
 import { Game, RULES } from './js/engine.js';
-import { botExchange, botWantsChicago, botPlay, botOpenChoice } from './js/bot.js';
+import { botExchange, botWantsChicago, botPlay, botOpenChoice, botBud } from './js/bot.js';
 
 let failures = 0;
 function check(name, cond) {
@@ -27,6 +27,7 @@ function botMoveFor(i, game) {
   const a = game.awaiting;
   if (a.action === 'exchange') return game.exchange(i, botExchange(game.players[i].hand));
   if (a.action === 'openOffer') return game.resolveOpen(i, botOpenChoice(game.players[i].hand, a.card, game.openOffer.idx));
+  if (a.action === 'bud') { const c = botBud(game.players[i].hand, a.bestCat); return c != null ? game.announceBud(i) : game.budPass(i); }
   if (a.action === 'chicago') return botWantsChicago(game.players[i].hand, game.players[i].points) ? game.bidChicago(i) : game.passChicago();
   if (a.action === 'play') {
     return game.playCard(i, botPlay({
@@ -93,6 +94,72 @@ function mulberry32(a) {
   };
 }
 
+// Budgivning (issue 47)
+{
+  // Förhand budar först, senare bud måste slå, poängen går till bäst bud
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1; // Datorn ger, Du (förhand) säger först
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)]; // par
+  g.players[1].hand = [C(5, S), C(5, H), C(5, D), C(7, K), C(11, S)]; // triss
+  g.beginBud('efter första bytet', 'kop2');
+  check('budfas pågår', g.phase === 'bud' && g.awaiting && g.awaiting.action === 'bud' && g.awaiting.player === 0);
+  check('förhand budar först', g.budOrder[0] === 0);
+  g.announceBud(0);
+  check('par budat', g.budCat === 1 && g.budAnnounced === 0);
+  check('turen går vidare', g.awaiting && g.awaiting.player === 1);
+  g.announceBud(1);
+  check('poäng till trisshanden', g.players[1].points === 3 && g.players[0].points === 0);
+  check('vidare till andra bytet', g.budWhen === 'efter andra bytet' && g.phase === 'bud');
+  g.announceBud(0); // par igen i andra budet
+  g.announceBud(1); // triss
+  check('två handpoäng utdelade', g.players[1].points === 6);
+  g.exchange(0, []); g.exchange(1, []); // tredje bytet sker utan budgivning
+  check('inget bud efter sista bytet, direkt till utspelet', g.phase === 'tricks' || g.phase === 'chicago');
+}
+{
+  // Tyst är alltid tillåtet och ger inget; alla tysta = ingen poäng
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop2'; g.dealer = 0; // Du ger, Datorn säger först
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)]; // par
+  g.players[1].hand = [C(2, S), C(4, H), C(6, D), C(7, K), C(11, S)]; // högkort
+  g.beginBud('efter andra bytet', 'kop3');
+  g.budPass(1);
+  g.budPass(0); // Du har par men väljer tyst
+  check('tyst med par ger ingen poäng', g.players[0].points === 0 && g.players[1].points === 0);
+  check('ingen bjuder, giv:en fortsätter', g.phase !== 'bud' && g.phase !== 'kop3');
+}
+{
+  // Lika hand slår inte: första budande behåller
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1; g.chicagoAsked = new Set();
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)];
+  g.players[1].hand = [C(5, S), C(5, H), C(3, D), C(7, K), C(11, S)]; // också par
+  g.beginBud('efter första bytet', 'kop2');
+  g.announceBud(0);
+  g.announceBud(1); // likavärdigt, blir tyst
+  check('likavärdigt slår inte, första behåller', g.players[0].points === 1 && g.players[1].points === 0 && g.budWhen === 'efter andra bytet');
+}
+{
+  // Spara/ladda mitt i budgivningen
+  const g = new Game(['Du', 'Datorn']);
+  g.onEvent = () => {};
+  g.giv = 1; g.phase = 'kop1'; g.dealer = 1; g.chicagoAsked = new Set();
+  g.exchanged = new Set([0, 1]);
+  g.players[0].hand = [C(9, S), C(9, H), C(3, D), C(7, K), C(11, S)];
+  g.players[1].hand = [C(5, S), C(5, H), C(5, D), C(7, K), C(11, S)];
+  g.beginBud('efter första bytet', 'kop2');
+  g.announceBud(0);
+  const g2 = Game.fromJSON(g.toJSON());
+  check('budfasen klarar sparning', g2.phase === 'bud' && g2.awaiting && g2.awaiting.action === 'bud' && g2.awaiting.player === 1 && g2.budCat === 1);
+  g2.announceBud(1);
+  check('bud klart efter laddning', g2.players[1].points === 3 && g2.budWhen === 'efter andra bytet');
+}
 console.log(failures === 0 ? 'ALLA TESTER OK' : `${failures} FEL`);
 process.exit(failures === 0 ? 0 : 1);
 
@@ -116,6 +183,7 @@ process.exit(failures === 0 ? 0 : 1);
     const a = g2.awaiting;
     if (!a) break;
     if (a.action === 'exchange') g2.exchange(a.player, a.player === 0 ? [] : [0]);
+    else if (a.action === 'bud') botBud(g2.players[a.player].hand, a.bestCat) != null ? g2.announceBud(a.player) : g2.budPass(a.player);
     else if (a.action === 'chicago') a.player === 0 ? g2.passChicago() : g2.bidChicago(1);
     else if (a.action === 'nextGiv') g2.nextGiv();
     else {
