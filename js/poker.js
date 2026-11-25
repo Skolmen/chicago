@@ -29,8 +29,7 @@ export function evaluate5(cards) {
   let straightHigh = 0;
   const uniq = [...new Set(rs)];
   if (uniq.length === 5) {
-    if (uniq[0] - uniq[4] === 4) straightHigh = uniq[0];
-    else if (uniq[0] === 14 && uniq[1] === 5 && uniq[1] - uniq[4] === 3) straightHigh = 5; // A-2-3-4-5
+    if (uniq[0] - uniq[4] === 4) straightHigh = uniq[0]; // ess är inte lägst: lägsta stege är 2-6
   }
   const counts = {};
   for (const r of rs) counts[r] = (counts[r] || 0) + 1;

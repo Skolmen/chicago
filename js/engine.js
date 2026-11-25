@@ -182,9 +182,9 @@ export class Game {
     return this.finishEndGiv();
   }
 
-  exchange(i, idxs) {
+  exchange(i, idxs, closedDirect = false) {
     const p = this.players[i];
-    if (idxs.length === 1 && this.talong.length) {
+    if (idxs.length === 1 && this.talong.length && !closedDirect) {
       // Ett öppet: kortet som skulle dras visas öppet för alla. Ta det eller
       // släng det och ta nästa kort stängt.
       const card = this.talong[this.talong.length - 1];
